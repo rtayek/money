@@ -23,6 +23,7 @@ import java.time.YearMonth;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -33,9 +34,11 @@ import java.util.TreeSet;
 import javax.swing.JFileChooser;
 import javax.swing.JFrame;
 import javax.swing.JPanel;
+import javax.swing.JOptionPane;
+import javax.swing.JScrollPane;
 import javax.swing.JTabbedPane;
+import javax.swing.JTextArea;
 import javax.swing.SwingUtilities;
-import javax.swing.Timer;
 import javax.swing.filechooser.FileNameExtensionFilter;
 
 /**
@@ -51,16 +54,18 @@ public final class SpendingPlot {
     record CategoryTotal(String category, double total) {}
 
     /** A single spending transaction (amount is a positive outflow). */
-    record Txn(LocalDate date, String category, double amount) {}
+    record Txn(LocalDate date, String category, String payee, double amount) {}
 
     /** Max distinct category lines drawn on the time chart; the rest = "Other". */
     private static final int MAX_SERIES = 20;
 
-    /** Categories to omit entirely (transfers/savings/income, not real spending). */
+    /**
+     * Categories to omit entirely. Account-to-account transfers and card
+     * payments are dropped via the CSV's own "Exclusion" flag; this set only
+     * removes income and Simplifi's generic transfer categories.
+     */
     private static final Set<String> EXCLUDED_CATEGORIES =
-            Set.of("Regular Savings", "Credit Card Payment", "Transfer",
-                    "Adv Plus Banking", "Traditional Gold Card",
-                    "Delta SkyMiles\u00AE Gold Card",
+            Set.of("Credit Card Payment", "Transfer",
                     "Personal Income", "Personal Income:Paycheck",
                     "Personal Income:Interest Earned");
 
@@ -103,6 +108,8 @@ public final class SpendingPlot {
         int dateCol = indexOfHeader(header, "Date");
         int catCol = indexOfHeader(header, "Category");
         int amtCol = indexOfHeader(header, "Amount");
+        int exclCol = indexOfHeader(header, "Exclusion");
+        int payeeCol = indexOfHeader(header, "Payee");
         if (catCol < 0 || amtCol < 0) {
             throw new IllegalStateException(
                     "CSV must have 'Category' and 'Amount' columns; found: " + header);
@@ -115,6 +122,10 @@ public final class SpendingPlot {
             List<String> fields = parseCsvLine(raw);
             if (amtCol >= fields.size() || catCol >= fields.size()) continue;
 
+            // Reject anything Simplifi has flagged as excluded (transfers, etc.).
+            if (exclCol >= 0 && exclCol < fields.size()
+                    && fields.get(exclCol).strip().equalsIgnoreCase("yes")) continue;
+
             double amount = parseAmount(fields.get(amtCol));
             if (amount >= 0) continue; // only outflows count as spending
 
@@ -124,8 +135,12 @@ public final class SpendingPlot {
 
             LocalDate date = (dateCol >= 0 && dateCol < fields.size())
                     ? parseDate(fields.get(dateCol)) : null;
+            // Drop the current (still-accumulating) month; it is only partial.
+            if (date != null && YearMonth.from(date).equals(YearMonth.now())) continue;
+            String payee = (payeeCol >= 0 && payeeCol < fields.size())
+                    ? fields.get(payeeCol).strip() : "";
 
-            txns.add(new Txn(date, category, -amount));
+            txns.add(new Txn(date, category, payee, -amount));
         }
         return txns;
     }
@@ -333,10 +348,13 @@ public final class SpendingPlot {
         private final double max;
         private final NumberFormat money = NumberFormat.getCurrencyInstance(Locale.US);
         private final DateTimeFormatter xFmt = DateTimeFormatter.ofPattern("MMM ''yy", Locale.US);
+        private final List<Txn> txns;                    // retained for point drill-down
+        private final Set<String> topSet;                // categories drawn as their own line
+        private final boolean hasOther;                  // whether an "Other" line exists
+        private int[][] ptX, ptY;                        // last-painted point coords [series][month]
+        private int selSeries = -1, selMonth = -1;       // selected point, -1 = none
         private final List<Rectangle> legendHit = new ArrayList<>(); // legend row hit boxes
-        private int selected = -1;                       // highlighted series, -1 = none
-        private boolean blinkOn = true;                  // current blink phase
-        private Timer blinkTimer;                         // drives the blink burst
+        private boolean pressing;                        // true while a legend label is held
 
         TimeSeriesPanel(List<Txn> txns, List<CategoryTotal> totals) {
             // Which categories get their own line; everything else -> "Other".
@@ -375,38 +393,91 @@ public final class SpendingPlot {
                 for (double v : arr) m = Math.max(m, v);
             this.max = (m == 0) ? 1 : m;
 
+            this.txns = txns;
+            this.hasOther = series.contains("Other");
+            this.topSet = new HashSet<>(series);
+            this.topSet.remove("Other");
+
             setBackground(Color.WHITE);
             setPreferredSize(new Dimension(960, 520));
 
             addMouseListener(new MouseAdapter() {
                 @Override public void mousePressed(MouseEvent e) {
                     for (int i = 0; i < legendHit.size(); i++) {
-                        if (legendHit.get(i).contains(e.getPoint())) { select(i); return; }
+                        if (legendHit.get(i).contains(e.getPoint())) {
+                            selSeries = (selSeries == i) ? -1 : i;
+                            selMonth = -1;              // clear any point drill-down
+                            pressing = (selSeries >= 0);
+                            repaint();
+                            return;
+                        }
                     }
+                    pickPoint(e.getX(), e.getY());      // otherwise treat as a point click
+                }
+                @Override public void mouseReleased(MouseEvent e) {
+                    if (pressing) { pressing = false; repaint(); }
                 }
             });
         }
 
-        /** Toggles the highlighted series and runs a short blink burst on it. */
-        private void select(int i) {
-            selected = (selected == i) ? -1 : i;
-            if (blinkTimer != null) blinkTimer.stop();
-            blinkOn = true;
-            if (selected >= 0) {
-                int[] toggles = {0};
-                blinkTimer = new Timer(300, ev -> {
-                    blinkOn = !blinkOn;
-                    if (++toggles[0] >= 6) { ((Timer) ev.getSource()).stop(); blinkOn = true; }
-                    repaint();
-                });
-                blinkTimer.start();
+        /** Selects the plotted point nearest the click and lists its transactions. */
+        private void pickPoint(int mx, int my) {
+            if (ptX == null) return;
+            int bestS = -1, bestI = -1, bestD = 12 * 12; // accept within ~12px
+            for (int s = 0; s < ptX.length; s++) {
+                for (int i = 0; i < ptX[s].length; i++) {
+                    int dx = mx - ptX[s][i], dy = my - ptY[s][i];
+                    int d = dx * dx + dy * dy;
+                    if (d <= bestD) { bestD = d; bestS = s; bestI = i; }
+                }
             }
+            if (bestS < 0) return;
+            selSeries = bestS; selMonth = bestI;
             repaint();
+            showTransactions(bestS, bestI);
+        }
+
+        /** Pops the transactions behind the selected (series, month) point. */
+        private void showTransactions(int s, int i) {
+            String name = series.get(s);
+            YearMonth ym = months.get(i);
+            List<Txn> hits = new ArrayList<>();
+            for (Txn t : txns) {
+                if (t.date() == null || !YearMonth.from(t.date()).equals(ym)) continue;
+                String key = topSet.contains(t.category()) ? t.category()
+                        : (hasOther ? "Other" : t.category());
+                if (key.equals(name)) hits.add(t);
+            }
+            hits.sort(Comparator.comparing(Txn::date));
+            DateTimeFormatter df = DateTimeFormatter.ofPattern("MMM d", Locale.US);
+            StringBuilder sb = new StringBuilder();
+            double total = 0;
+            for (Txn t : hits) {
+                total += t.amount();
+                sb.append(String.format(Locale.US, "%-7s %11s  %-22s %s%n",
+                        t.date().format(df), money.format(t.amount()),
+                        t.category(), t.payee()));
+            }
+            if (hits.isEmpty()) sb.append("(no transactions)");
+            String header = String.format(Locale.US, "%s  -  %s   (%d txns, %s)",
+                    name, ym.format(xFmt), hits.size(), money.format(total));
+            JTextArea area = new JTextArea(sb.toString(),
+                    Math.min(24, Math.max(6, hits.size() + 1)), 64);
+            area.setEditable(false);
+            area.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 14));
+            JOptionPane.showMessageDialog(this, new JScrollPane(area), header,
+                    JOptionPane.PLAIN_MESSAGE);
         }
 
         /** A washed-out version of a series color, for the non-selected lines. */
         private static Color fade(Color c) {
             return new Color(c.getRed(), c.getGreen(), c.getBlue(), 45);
+        }
+
+        /** Tick step (a whole multiple of $1,000) giving roughly five gridlines. */
+        private static double thousandStep(double dataMax) {
+            double step = Math.ceil(dataMax / 5.0 / 1000.0) * 1000.0;
+            return Math.max(1000.0, step);
         }
 
         @Override
@@ -430,15 +501,16 @@ public final class SpendingPlot {
                 return;
             }
 
-            // y grid + currency labels
-            int ticks = 5;
-            g.setColor(new Color(0xEE, 0xEE, 0xEE));
+            // y grid at even $1,000 multiples
+            double step = thousandStep(max);
+            int ticks = (int) Math.ceil(max / step);
+            double axisMax = ticks * step;
             for (int t = 0; t <= ticks; t++) {
                 int y = top + plotH - (int) Math.round(plotH * (t / (double) ticks));
                 g.setColor(new Color(0xEE, 0xEE, 0xEE));
                 g.drawLine(left, y, left + plotW, y);
                 g.setColor(Color.GRAY);
-                String lab = money.format(max * t / ticks);
+                String lab = String.format(Locale.US, "$%,d", (long) (step * t));
                 drawRightAligned(g, lab, left - 6, y + 4);
             }
 
@@ -463,33 +535,43 @@ public final class SpendingPlot {
                         top + plotH + 16);
             }
 
-            // one line per series (selected one is bold; others faded)
+            // one line per series; remember point coords for click hit-testing
+            ptX = new int[series.size()][n];
+            ptY = new int[series.size()][n];
             for (int s = 0; s < series.size(); s++) {
-                boolean sel = (s == selected);
-                if (sel && !blinkOn) continue;      // blink: skip on the off phase
+                boolean sel = (s == selSeries);
                 double[] arr = values.get(series.get(s));
-                g.setColor(selected >= 0 && !sel ? fade(seriesColor(s)) : seriesColor(s));
-                g.setStroke(new BasicStroke(sel ? 4f : 2f));
-                int dot = sel ? 3 : 2;
+                g.setColor(selSeries >= 0 && !sel ? fade(seriesColor(s)) : seriesColor(s));
+                g.setStroke(new BasicStroke(sel ? (pressing ? 6f : 4f) : 2f));
+                int dot = sel ? (pressing ? 4 : 3) : 2;
                 int prevX = 0, prevY = 0;
                 for (int i = 0; i < n; i++) {
                     int x = xAt.applyAsInt(i);
-                    int y = top + plotH - (int) Math.round(plotH * (arr[i] / max));
+                    int y = top + plotH - (int) Math.round(plotH * (arr[i] / axisMax));
+                    ptX[s][i] = x; ptY[s][i] = y;
                     if (i > 0) g.drawLine(prevX, prevY, x, y);
                     g.fillOval(x - dot, y - dot, 2 * dot, 2 * dot);
                     prevX = x; prevY = y;
                 }
             }
 
-            // legend (click a row to highlight/blink its line)
+            // ring the selected point
+            if (selSeries >= 0 && selMonth >= 0) {
+                g.setColor(Color.BLACK);
+                g.setStroke(new BasicStroke(2f));
+                int x = ptX[selSeries][selMonth], y = ptY[selSeries][selMonth];
+                g.drawOval(x - 6, y - 6, 12, 12);
+            }
+
+            // legend (click a label to highlight its line; click a point to drill in)
             legendHit.clear();
             int lx = left + plotW + 14;
             int ly = top + 4;
             for (int s = 0; s < series.size(); s++) {
                 g.setColor(seriesColor(s));
                 g.fillRect(lx, ly, 12, 12);
-                g.setColor(s == selected ? Color.BLACK : Color.DARK_GRAY);
-                g.setFont(getFont().deriveFont(s == selected ? Font.BOLD : Font.PLAIN, 11f));
+                g.setColor(s == selSeries ? Color.BLACK : Color.DARK_GRAY);
+                g.setFont(getFont().deriveFont(s == selSeries ? Font.BOLD : Font.PLAIN, 11f));
                 g.drawString(series.get(s), lx + 18, ly + 11);
                 legendHit.add(new Rectangle(lx, ly, right - 20, 16));
                 ly += 20;
