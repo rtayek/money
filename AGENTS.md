@@ -1,0 +1,1 @@
+C:/Users/ray/eclipse-workspace/dotmdfiles/real/AGENTS.md
