@@ -42,9 +42,9 @@ import javax.swing.JScrollPane;
 import javax.swing.JTabbedPane;
 import javax.swing.JTable;
 import javax.swing.JTextArea;
-import javax.swing.Timer;
 import javax.swing.SwingConstants;
 import javax.swing.SwingUtilities;
+import javax.swing.Timer;
 import javax.swing.filechooser.FileNameExtensionFilter;
 import javax.swing.table.DefaultTableCellRenderer;
 import javax.swing.table.DefaultTableModel;
@@ -64,26 +64,6 @@ public final class SpendingPlot {
     /** A single spending transaction (amount is a positive outflow). */
     record Transaction(LocalDate date, String category, String payee, double amount) {}
 
-    /** Max distinct category lines drawn on the time chart; the rest = "Other". */
-    private static final int MAX_SERIES = 100;
-
-    /** Close the chart window after this many minutes. */
-    private static final int AUTO_CLOSE_MINUTES = 10;
-
-    /**
-     * Deviation pane only: categories whose monthly spending std dev is below
-     * this many dollars are dropped as noise.
-     */
-    private static final double DEVIATION_MIN_STDDEV = 100;
-
-    /**
-     * Deviation pane only: category name prefixes always dropped regardless of
-     * std dev (big, lumpy, irregular spikes that swamp the chart). A prefix like
-     * "Auto & Transport" drops that category and all its sub-categories.
-     */
-    private static final Set<String> DEVIATION_EXCLUDED =
-            Set.of("Taxes:Federal Tax", "Auto & Transport");
-
     /** True if a category should be excluded from the deviation pane. */
     private static boolean isDeviationExcluded(String category) {
         for (String prefix : DEVIATION_EXCLUDED)
@@ -91,45 +71,23 @@ public final class SpendingPlot {
         return false;
     }
 
-    /**
-     * Categories to omit entirely. Account-to-account transfers and card
-     * payments are dropped via the CSV's own "Exclusion" flag; this set only
-     * removes income and Simplifi's generic transfer categories.
-     */
-    private static final Set<String> EXCLUDED_CATEGORIES =
-            Set.of("Credit Card Payment", "Transfer",
-                    "Personal Income", "Personal Income:Paycheck",
-                    "Personal Income:Interest Earned");
-
-    public static void main(String[] args) {
-        //Path csv = (args.length > 0) ? Path.of(args[0]) : chooseFile();
-        Path csv = Path.of("all.csv");
-        
-        if (csv == null) {
-            System.out.println("No file selected.");
-            return;
-        }
-        List<Transaction> transactions = loadTransactions(csv);
-        if (transactions.isEmpty()) {
-            System.out.println("No spending rows found in " + csv);
-            return;
-        }
-        List<CategoryTotal> totals = categoryTotals(transactions);
-        totals.forEach(ct -> System.out.printf(Locale.US, "%-30s %,12.2f%n",
-                ct.category(), ct.total()));
-        SwingUtilities.invokeLater(
-                () -> showCharts(csv.getFileName().toString(), transactions, totals));
-        printUncategorizedChecks(transactions);
-        printUncategorized(transactions);
+    /** Uses ./all.csv if present, otherwise opens a file chooser. */
+    private static Path chooseOrDefault() {
+        Path defaultCsv = Path.of("all.csv");
+        return Files.exists(defaultCsv) ? defaultCsv : chooseFile();
     }
 
-    // ---- CSV loading ----------------------------------------------------
+    // ---- CSV loading ------------------------------------------------------
 
     /**
-     * Parses the CSV into spending transactions (outflows only), locating the
-     * "Date", "Category" and "Amount" columns by header name (order-independent).
+     * Parses every row of the CSV, dropping only what Simplifi itself flagged
+     * as excluded (account transfers, card payments, etc. via the "Exclusion"
+     * column). Every month and category is kept, and the amount keeps its
+     * original CSV sign (negative = money out). This is the single read of
+     * the file; {@link #toSpendingTransactions}, {@link #findUncategorizedChecks},
+     * and {@link #printUncategorized} each filter this list for their own needs.
      */
-    static List<Transaction> loadTransactions(Path csv) {
+    static List<Transaction> loadAllTransactions(Path csv) {
         List<String> lines;
         try {
             lines = Files.readAllLines(csv, StandardCharsets.UTF_8);
@@ -161,54 +119,35 @@ public final class SpendingPlot {
                     && fields.get(exclCol).strip().equalsIgnoreCase("yes")) continue;
 
             double amount = parseAmount(fields.get(amtCol));
-            if (amount >= 0) continue; // only outflows count as spending
-
             String category = fields.get(catCol).strip();
             if (category.isEmpty()) category = "(Uncategorized)";
-            if (EXCLUDED_CATEGORIES.contains(category)) continue;
-
             LocalDate date = (dateCol >= 0 && dateCol < fields.size())
                     ? parseDate(fields.get(dateCol)) : null;
-            // Drop the current (still-accumulating) month; it is only partial.
-            if (date != null && YearMonth.from(date).equals(YearMonth.now())) continue;
             String payee = (payeeCol >= 0 && payeeCol < fields.size())
                     ? fields.get(payeeCol).strip() : "";
 
-            txns.add(new Transaction(date, category, payee, -amount));
+            txns.add(new Transaction(date, category, payee, amount));
         }
         return txns;
     }
 
-    /** Payee pattern for a paper check, e.g. "Check 1234". */
-    private static final Pattern CHECK_PAYEE =
-            Pattern.compile("(?i)^check\\s+(\\d+)\\s*$");
-
-    /** Prints every uncategorized paper check in {@code transactions} to stdout. */
-    static void printUncategorizedChecks(List<Transaction> transactions) {
-        List<Transaction> checks = new ArrayList<>();
-        for (Transaction t : transactions) {
-            String category = t.category() == null ? "" : t.category().strip();
-            boolean uncategorized = category.isEmpty()
-                    || category.equalsIgnoreCase("Uncategorized")
-                    || category.equalsIgnoreCase("(Uncategorized)");
-            if (!uncategorized) continue;
-            if (t.payee() == null || !CHECK_PAYEE.matcher(t.payee().strip()).matches()) continue;
-            checks.add(t);
+    /**
+     * Narrows an unfiltered transaction list down to what the charts show:
+     * outflows only (amount flipped to a positive spending magnitude), the
+     * generic income/transfer categories dropped, anything before
+     * {@link #START_DATE} dropped, and the current (still-accumulating) month
+     * dropped since it's only partial.
+     */
+    static List<Transaction> toSpendingTransactions(List<Transaction> all) {
+        List<Transaction> out = new ArrayList<>();
+        for (Transaction t : all) {
+            if (t.amount() >= 0) continue; // only outflows count as spending
+            if (EXCLUDED_CATEGORIES.contains(t.category())) continue;
+            if (START_DATE != null && t.date() != null && t.date().isBefore(START_DATE)) continue;
+            if (t.date() != null && YearMonth.from(t.date()).equals(YearMonth.now())) continue;
+            out.add(new Transaction(t.date(), t.category(), t.payee(), -t.amount()));
         }
-        checks.sort(Comparator.comparing(Transaction::date,
-                Comparator.nullsLast(Comparator.naturalOrder())).reversed());
-
-        if (checks.isEmpty()) {
-            System.out.println("No uncategorized checks.");
-            return;
-        }
-        System.out.printf(Locale.US, "%-12s %-8s %12s%n", "Date", "Check", "Amount");
-        for (Transaction t : checks) {
-            Matcher m = CHECK_PAYEE.matcher(t.payee().strip());
-            m.matches();
-            System.out.printf(Locale.US, "%-12s %-8s %,12.2f%n",
-                    t.date(), m.group(1), t.amount());
-        }
+        return out;
     }
 
     /** True if a transaction has no meaningful category assigned. */
@@ -219,14 +158,73 @@ public final class SpendingPlot {
                 || category.equalsIgnoreCase("(Uncategorized)");
     }
 
+    /** One uncategorized paper check: its date, check number, and paid-out amount. */
+    record CheckEntry(LocalDate date, String checkNumber, double amount) {}
+
     /**
-     * Prints every uncategorized transaction that is not a paper check to stdout
-     * (paper checks are covered by {@link #printUncategorizedChecks}).
+     * Finds uncategorized paper checks in {@code all} -- every month, not just
+     * ones {@link #toSpendingTransactions} would keep, so a check written this
+     * month still shows up here in time to categorize it.
      */
-    static void printUncategorized(List<Transaction> transactions) {
+    static List<CheckEntry> findUncategorizedChecks(List<Transaction> all) {
+        List<CheckEntry> checks = new ArrayList<>();
+        for (Transaction t : all) {
+            if (!isUncategorized(t) || t.payee() == null) continue;
+            Matcher m = CHECK_PAYEE.matcher(t.payee().strip());
+            if (!m.matches()) continue;
+            if (t.amount() >= 0) continue; // only paid-out checks
+            checks.add(new CheckEntry(t.date(), m.group(1), -t.amount()));
+        }
+        // Undated checks (unparseable/missing date) still count; sort them last.
+        checks.sort(Comparator.comparing(CheckEntry::date,
+                        Comparator.nullsLast(Comparator.reverseOrder()))
+                .thenComparing(CheckEntry::checkNumber));
+        return checks;
+    }
+
+    /** Prints every uncategorized paper check to stdout, undated ones included. */
+    static void printUncategorizedChecks(List<CheckEntry> checks) {
+        if (checks.isEmpty()) {
+            System.out.println("No uncategorized checks.");
+            return;
+        }
+        System.out.printf(Locale.US, "%-12s %-10s %12s%n", "Date", "Check", "Amount");
+        double total = 0;
+        for (CheckEntry c : checks) {
+            total += c.amount();
+            System.out.printf(Locale.US, "%-12s %-10s %,12.2f%n",
+                    c.date() == null ? "(no date)" : c.date(), c.checkNumber(), c.amount());
+        }
+        System.out.printf(Locale.US, "%-12s %-10s %,12.2f%n", "", "Total", total);
+    }
+
+    /** Writes the uncategorized-check list to a CSV report, creating parent directories as needed. */
+    static void writeUncategorizedChecks(List<CheckEntry> checks, Path output) {
+        List<String> lines = new ArrayList<>();
+        lines.add("Date,Check Number,Amount");
+        for (CheckEntry c : checks) {
+            lines.add(String.format(Locale.US, "%s,%s,%.2f",
+                    c.date() == null ? "" : c.date(), c.checkNumber(), c.amount()));
+        }
+        try {
+            Path parent = output.toAbsolutePath().getParent();
+            if (parent != null) Files.createDirectories(parent);
+            Files.write(output, lines, StandardCharsets.UTF_8);
+        } catch (IOException e) {
+            throw new UncheckedIOException("Could not write " + output, e);
+        }
+    }
+
+    /**
+     * Prints every uncategorized transaction that is not a paper check to
+     * stdout (paper checks are covered by {@link #findUncategorizedChecks}).
+     * Reads from the unfiltered list so the current month is included.
+     */
+    static void printUncategorized(List<Transaction> all) {
         List<Transaction> uncategorized = new ArrayList<>();
-        for (Transaction t : transactions) {
+        for (Transaction t : all) {
             if (!isUncategorized(t)) continue;
+            if (t.amount() >= 0) continue; // only outflows
             if (t.payee() != null && CHECK_PAYEE.matcher(t.payee().strip()).matches()) continue;
             uncategorized.add(t);
         }
@@ -240,17 +238,18 @@ public final class SpendingPlot {
         System.out.printf(Locale.US, "%-12s %12s  %s%n", "Date", "Amount", "Payee");
         double total = 0;
         for (Transaction t : uncategorized) {
-            total += t.amount();
+            double amount = -t.amount();
+            total += amount;
             System.out.printf(Locale.US, "%-12s %,12.2f  %s%n",
-                    t.date(), t.amount(), t.payee());
+                    t.date(), amount, t.payee());
         }
         System.out.printf(Locale.US, "%-12s %,12.2f%n", "Total", total);
     }
 
     /** Aggregates transactions into per-category totals, sorted largest first. */
-    static List<CategoryTotal> categoryTotals(List<Transaction> transactionss) {
+    static List<CategoryTotal> categoryTotals(List<Transaction> transactions) {
         Map<String, Double> totals = new LinkedHashMap<>();
-        for (Transaction t : transactionss) totals.merge(t.category(), t.amount(), Double::sum);
+        for (Transaction t : transactions) totals.merge(t.category(), t.amount(), Double::sum);
         List<CategoryTotal> out = new ArrayList<>();
         totals.forEach((k, v) -> out.add(new CategoryTotal(k, v)));
         out.sort(Comparator.comparingDouble(CategoryTotal::total).reversed());
@@ -276,7 +275,7 @@ public final class SpendingPlot {
         Map<String, double[]> byCat = new LinkedHashMap<>();
         for (Transaction t : transactions) {
             if (t.date() == null) continue;
-            byCat.computeIfAbsent(t.category(), k -> new double[n])
+            byCat.computeIfAbsent(t.category(), _ -> new double[n])
                  [idx.get(YearMonth.from(t.date()))] += t.amount();
         }
 
@@ -292,12 +291,6 @@ public final class SpendingPlot {
         out.sort(Comparator.comparingDouble(CategoryTotal::total).reversed());
         return out;
     }
-
-    private static final String[] DATE_PATTERNS = {
-        "MMM d, yyyy", "MMMM d, yyyy",          // Simplifi: "Sep 12, 2026"
-        "M/d/yyyy", "MM/dd/yyyy", "M/d/yy", "MM/dd/yy",
-        "yyyy/M/d", "M-d-yyyy", "MM-dd-yyyy", "d-MMM-yyyy", "d MMM yyyy"
-    };
 
     /** Parses a date in a variety of common formats; null if unparseable. */
     static LocalDate parseDate(String s) {
@@ -395,18 +388,18 @@ public final class SpendingPlot {
         tabs.addTab("By Category", new JScrollPane(new BarChartPanel(totals)));
         tabs.addTab("Over Time", new TimeSeriesPanel(transactions, totals));
         tabs.addTab("Std Dev", new StdDevPanel(categoryMonthlyStdDevs(transactions)));
-        // Deviation pane: drop categories whose monthly std dev is below the
-        // threshold (the flattest lines) to reduce clutter.
-        List<CategoryTotal> sds = categoryMonthlyStdDevs(transactions);
-        Set<String> lowestDev = new HashSet<>();
-        for (CategoryTotal sd : sds)
-            if (sd.total() < DEVIATION_MIN_STDDEV) lowestDev.add(sd.category());
-        List<Transaction> devTxns = new ArrayList<>();
-        for (Transaction t : transactions)
-            if (!lowestDev.contains(t.category())
-                    && !isDeviationExcluded(t.category())) devTxns.add(t);
-        tabs.addTab("Deviation",
-                new TimeSeriesPanel(devTxns, categoryTotals(devTxns), true));
+        // Two deviation panes: after dropping excluded prefixes and anything
+        // below the noise floor, split the survivors at their median std dev --
+        // top half in "High", bottom half in "Low".
+        List<String> ranked = new ArrayList<>();          // sorted high std dev -> low
+        for (CategoryTotal sd : categoryMonthlyStdDevs(transactions))
+            if (sd.total() >= DEVIATION_MIN_STDDEV && !isDeviationExcluded(sd.category()))
+                ranked.add(sd.category());
+        int mid = (ranked.size() + 1) / 2;                // high half keeps the odd one
+        tabs.addTab("High Deviation", deviationPanel(transactions,
+                new HashSet<>(ranked.subList(0, mid))));
+        tabs.addTab("Low Deviation", deviationPanel(transactions,
+                new HashSet<>(ranked.subList(mid, ranked.size()))));
 
         // Fifth pane: total monthly spending as one series, plotted as its
         // dollar deviation from the overall monthly mean.
@@ -428,17 +421,18 @@ public final class SpendingPlot {
         frame.setSize(Math.min(960, scr.width), Math.min(wantH, scr.height));
         frame.setLocationRelativeTo(null);
         frame.setVisible(true);
-        closeAfter(frame, AUTO_CLOSE_MINUTES);
+        TimeSeriesPanel.closeAfter(frame, 5);   // auto-close the window after 5 minutes
     }
 
-    /** Starts a one-shot Swing timer that closes the supplied window. */
-    static Timer closeAfter(Window window, int minutes) {
-        if (minutes <= 0) throw new IllegalArgumentException("minutes must be positive");
-        int delayMillis = Math.multiplyExact(minutes, 60_000);
-        Timer timer = new Timer(delayMillis, event -> window.dispose());
-        timer.setRepeats(false);
-        timer.start();
-        return timer;
+    /**
+     * Builds a deviation-from-mean chart limited to the given categories.
+     */
+    private static TimeSeriesPanel deviationPanel(List<Transaction> transactions,
+                                                  Set<String> keep) {
+        List<Transaction> devTxns = new ArrayList<>();
+        for (Transaction t : transactions)
+            if (keep.contains(t.category())) devTxns.add(t);
+        return new TimeSeriesPanel(devTxns, categoryTotals(devTxns), true);
     }
 
     private static Color seriesColor(int i) {
@@ -447,6 +441,7 @@ public final class SpendingPlot {
     }
 
     /** Horizontal bar chart drawn with Java2D. */
+    @SuppressWarnings("serial")
     static final class BarChartPanel extends JPanel {
         private final List<CategoryTotal> data;
         private final double max;
@@ -503,7 +498,7 @@ public final class SpendingPlot {
             g.drawLine(barX, top - 4, barX, top + data.size() * rowH);
         }
 
-        private void drawRightAligned(Graphics2D g, String s, int rightEdge, int y) {
+        private static void drawRightAligned(Graphics2D g, String s, int rightEdge, int y) {
             Rectangle2D b = g.getFontMetrics().getStringBounds(s, g);
             int x = (int) (rightEdge - b.getWidth());
             g.drawString(s, Math.max(4, x), y);
@@ -519,22 +514,22 @@ public final class SpendingPlot {
      * beyond the top {@link #MAX_SERIES} (by total) are combined into "Other".
      * Transactions with an unparseable/missing date are skipped here.
      */
+    @SuppressWarnings("serial")
     static final class TimeSeriesPanel extends JPanel {
-        private final List<String> series;              // category names, in legend order
-        private final List<YearMonth> months;           // x axis, ascending
-        private final Map<String, double[]> values;     // category -> per-month totals
-        private final boolean deviation;                 // plot value - mean instead of value
-        private final double max, min;                   // data range across all series
-        private final NumberFormat money = NumberFormat.getCurrencyInstance(Locale.US);
-        private final DateTimeFormatter xFmt = DateTimeFormatter.ofPattern("MMM ''yy", Locale.US);
-        private final List<Transaction> txns;                    // retained for point drill-down
-        private final Set<String> topSet;                // categories drawn as their own line
-        private final boolean hasOther;                  // whether an "Other" line exists
-        private int[][] ptX, ptY;                        // last-painted point coords [series][month]
-        private int selSeries = -1, selMonth = -1;       // selected point, -1 = none
-        private final List<Rectangle> legendHit = new ArrayList<>(); // legend row hit boxes
-        private boolean pressing;                        // true while a legend label is held
 
+        static Timer closeAfter(Window window, int minutes) {
+            Timer timer = new Timer(minutes * 60 * 1000, _ -> {
+                window.dispose();
+
+                // Use this only if closing the window must terminate the entire app:
+                // System.exit(0);
+            });
+
+            timer.setRepeats(false);
+            timer.start();
+            return timer;
+        }
+        
         TimeSeriesPanel(List<Transaction> txns, List<CategoryTotal> totals) {
             this(txns, totals, false);
         }
@@ -582,11 +577,7 @@ public final class SpendingPlot {
                 }
             }
 
-            double hi = 0, lo = 0;
-            for (double[] arr : values.values())
-                for (double v : arr) { hi = Math.max(hi, v); lo = Math.min(lo, v); }
-            this.max = (hi == 0) ? 1 : hi;
-            this.min = lo;
+            recomputeRange();
 
             this.txns = txns;
             this.hasOther = series.contains("Other");
@@ -599,20 +590,47 @@ public final class SpendingPlot {
             addMouseListener(new MouseAdapter() {
                 @Override public void mousePressed(MouseEvent e) {
                     for (int i = 0; i < legendHit.size(); i++) {
-                        if (legendHit.get(i).contains(e.getPoint())) {
+                        if (!legendHit.get(i).contains(e.getPoint())) continue;
+                        if (SwingUtilities.isRightMouseButton(e)) {
+                            removeSeries(i);            // right-click a legend label: hide it
+                        } else {
                             selSeries = (selSeries == i) ? -1 : i;
                             selMonth = -1;              // clear any point drill-down
                             pressing = (selSeries >= 0);
                             repaint();
-                            return;
                         }
+                        return;
                     }
-                    pickPoint(e.getX(), e.getY());      // otherwise treat as a point click
+                    if (!SwingUtilities.isRightMouseButton(e)) {
+                        pickPoint(e.getX(), e.getY());  // otherwise treat as a point click
+                    }
                 }
                 @Override public void mouseReleased(MouseEvent e) {
                     if (pressing) { pressing = false; repaint(); }
                 }
             });
+        }
+
+        /** Removes one category's line from this chart (right-click on its legend). */
+        private void removeSeries(int i) {
+            if (i < 0 || i >= series.size()) return;
+            String removed = series.remove(i);
+            values.remove(removed);
+            topSet.remove(removed);
+            if (selSeries == i) selSeries = -1;
+            else if (selSeries > i) selSeries--;
+            selMonth = -1;
+            recomputeRange();               // rescale the y-axis to the remaining lines
+            repaint();
+        }
+
+        /** Recomputes the {@link #max}/{@link #min} data range over the current series. */
+        private void recomputeRange() {
+            double hi = 0, lo = 0;
+            for (double[] arr : values.values())
+                for (double v : arr) { hi = Math.max(hi, v); lo = Math.min(lo, v); }
+            this.max = (hi == 0) ? 1 : hi;
+            this.min = lo;
         }
 
         /** Selects the plotted point nearest the click and lists its transactions. */
@@ -675,6 +693,20 @@ public final class SpendingPlot {
             return Math.max(1000.0, step);
         }
 
+        /**
+         * A "nice" 1 / 2 / 5 x 10^k tick step giving roughly five gridlines over
+         * {@code range} -- used by the deviation panes so small spans aren't
+         * squished against zero.
+         */
+        private static double niceStep(double range) {
+            if (range <= 0) return 1;
+            double raw = range / 5.0;
+            double pow = Math.pow(10, Math.floor(Math.log10(raw)));
+            double f = raw / pow;
+            double nice = (f <= 1) ? 1 : (f <= 2) ? 2 : (f <= 5) ? 5 : 10;
+            return nice * pow;
+        }
+
         @Override
         protected void paintComponent(Graphics g0) {
             super.paintComponent(g0);
@@ -696,17 +728,18 @@ public final class SpendingPlot {
                 return;
             }
 
-            // y grid at even $1,000 multiples; deviation mode spans +/- around zero.
+            // y grid: deviation mode fills the plot with the exact [min, max]
+            // range and draws gridlines only at nice steps inside it; the plain
+            // chart runs 0..max rounded up to a nice step.
             double step, axisMin, axisMax;
             int loTick, hiTick;
             if (deviation) {
-                double mag = Math.max(Math.abs(max), Math.abs(min));
-                if (mag == 0) mag = 1;
-                step = thousandStep(mag);
-                hiTick = (int) Math.ceil(mag / step);
-                loTick = -hiTick;
-                axisMax = hiTick * step;
-                axisMin = -axisMax;
+                axisMin = min;
+                axisMax = max;
+                if (axisMax <= axisMin) axisMax = axisMin + 1; // guard a flat range
+                step = niceStep(axisMax - axisMin);
+                loTick = (int) Math.ceil(axisMin / step);      // gridlines within range
+                hiTick = (int) Math.floor(axisMax / step);
             } else {
                 step = thousandStep(max);
                 hiTick = (int) Math.ceil(max / step);
@@ -803,13 +836,31 @@ public final class SpendingPlot {
             g.setFont(getFont().deriveFont(Font.PLAIN, 11f));
         }
 
-        private void drawRightAligned(Graphics2D g, String s, int rightEdge, int y) {
+        private static void drawRightAligned(Graphics2D g, String s, int rightEdge, int y) {
             Rectangle2D b = g.getFontMetrics().getStringBounds(s, g);
             g.drawString(s, Math.max(2, (int) (rightEdge - b.getWidth())), y);
         }
+
+        // ---- fields -------------------------------------------------------
+
+        private final List<String> series;              // category names, in legend order
+        private final List<YearMonth> months;           // x axis, ascending
+        private final Map<String, double[]> values;     // category -> per-month totals
+        private final boolean deviation;                 // plot value - mean instead of value
+        private double max, min;                         // data range across all series
+        private final NumberFormat money = NumberFormat.getCurrencyInstance(Locale.US);
+        private final DateTimeFormatter xFmt = DateTimeFormatter.ofPattern("MMM ''yy", Locale.US);
+        private final List<Transaction> txns;                    // retained for point drill-down
+        private final Set<String> topSet;                // categories drawn as their own line
+        private final boolean hasOther;                  // whether an "Other" line exists
+        private int[][] ptX, ptY;                        // last-painted point coords [series][month]
+        private int selSeries = -1, selMonth = -1;       // selected point, -1 = none
+        private final List<Rectangle> legendHit = new ArrayList<>(); // legend row hit boxes
+        private boolean pressing;                        // true while a legend label is held
     }
 
     /** A plain table of each category and its monthly-spending standard deviation. */
+    @SuppressWarnings("serial")
     static final class StdDevPanel extends JPanel {
         StdDevPanel(List<CategoryTotal> stdDevs) {
             super(new BorderLayout());
@@ -842,4 +893,86 @@ public final class SpendingPlot {
             add(center, BorderLayout.CENTER);
         }
     }
+
+    // ---- entry point ------------------------------------------------------
+
+    public static void main(String[] args) {
+        Path csv = (args.length > 0) ? Path.of(args[0]) : chooseOrDefault();
+
+        if (csv == null) {
+            System.out.println("No file selected.");
+            return;
+        }
+
+        // Load once, unfiltered; each report below filters it for its own purpose.
+        List<Transaction> all = loadAllTransactions(csv);
+        if (all.isEmpty()) {
+            System.out.println("No rows found in " + csv);
+            return;
+        }
+
+        List<Transaction> spending = toSpendingTransactions(all);
+        List<CategoryTotal> totals = categoryTotals(spending);
+        totals.forEach(ct -> System.out.printf(Locale.US, "%-30s %,12.2f%n",
+                ct.category(), ct.total()));
+        SwingUtilities.invokeLater(
+                () -> showCharts(csv.getFileName().toString(), spending, totals));
+
+        List<CheckEntry> checks = findUncategorizedChecks(all);
+        printUncategorizedChecks(checks);
+        writeUncategorizedChecks(checks, UNCATEGORIZED_CHECKS_OUTPUT);
+        System.out.printf(Locale.US, "Wrote %d uncategorized checks to %s%n",
+                checks.size(), UNCATEGORIZED_CHECKS_OUTPUT.toAbsolutePath());
+        printUncategorized(all);
+    }
+
+    // ---- fields -----------------------------------------------------------
+
+    /** Max distinct category lines drawn on the time chart; the rest = "Other". */
+    private static final int MAX_SERIES = 100;
+
+    /**
+     * Charts/stats include only spending on or after this date; set to null to
+     * include everything. Undated transactions are never dropped by this filter.
+     */
+    private static final LocalDate START_DATE = LocalDate.of(2026, 1, 1); // null = no filter
+
+    /**
+     * Deviation panes only: categories whose monthly spending std dev is below
+     * this many dollars are dropped as noise. The survivors are then split at
+     * their median into the High and Low deviation panes.
+     */
+    private static final double DEVIATION_MIN_STDDEV = 20;
+
+    /**
+     * Deviation pane only: category name prefixes always dropped regardless of
+     * std dev (big, lumpy, irregular spikes that swamp the chart). A prefix like
+     * "Auto & Transport" drops that category and all its sub-categories.
+     */
+    private static final Set<String> DEVIATION_EXCLUDED =
+            Set.of("Taxes:Federal Tax", "Auto & Transport");
+
+    /**
+     * Categories to omit entirely. Account-to-account transfers and card
+     * payments are dropped via the CSV's own "Exclusion" flag; this set only
+     * removes income and Simplifi's generic transfer categories.
+     */
+    private static final Set<String> EXCLUDED_CATEGORIES =
+            Set.of("Credit Card Payment", "Transfer",
+                    "Personal Income", "Personal Income:Paycheck",
+                    "Personal Income:Interest Earned");
+
+    /** Where the uncategorized-checks report is written, matching the old standalone tool's default. */
+    private static final Path UNCATEGORIZED_CHECKS_OUTPUT =
+            Path.of("uncategorized-checks.csv");
+
+    /** Payee pattern for a paper check, e.g. "Check 1234". */
+    private static final Pattern CHECK_PAYEE =
+            Pattern.compile("(?i)^check\\s+(\\d+)\\s*$");
+
+    private static final String[] DATE_PATTERNS = {
+        "MMM d, yyyy", "MMMM d, yyyy",          // Simplifi: "Sep 12, 2026"
+        "M/d/yyyy", "MM/dd/yyyy", "M/d/yy", "MM/dd/yy",
+        "yyyy/M/d", "M-d-yyyy", "MM-dd-yyyy", "d-MMM-yyyy", "d MMM yyyy"
+    };
 }
