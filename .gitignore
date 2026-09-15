@@ -81,6 +81,7 @@ testfile.txt
 # Personal financial data (never commit)
 ###############################################################################
 /all.csv
+/uncategorized-checks.csv
 
 ###############################################################################
 # Coverage / analysis tools (if enabled later)
