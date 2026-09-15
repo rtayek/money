@@ -5,6 +5,7 @@ import java.awt.BasicStroke;
 import java.awt.BorderLayout;
 import java.awt.Color;
 import java.awt.Dimension;
+import java.awt.FlowLayout;
 import java.awt.Font;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
@@ -28,14 +29,17 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Properties;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import javax.swing.JButton;
 import javax.swing.JFileChooser;
 import javax.swing.JFrame;
 import javax.swing.JPanel;
@@ -386,9 +390,15 @@ public final class SpendingPlot {
         JFrame frame = new JFrame("Spending — " + title);
         frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
 
+        // Categories the user right-clicks away are collected here (across all
+        // line charts) and persisted on exit; the Resume button re-applies them.
+        Set<String> removed = new LinkedHashSet<>();
+        List<TimeSeriesPanel> linePanels = new ArrayList<>();
+
         JTabbedPane tabs = new JTabbedPane();
         tabs.addTab("By Category", new JScrollPane(new BarChartPanel(totals)));
-        tabs.addTab("Over Time", new TimeSeriesPanel(transactions, totals));
+        tabs.addTab("Over Time", track(new TimeSeriesPanel(transactions, totals),
+                removed, linePanels));
         tabs.addTab("Std Dev", new StdDevPanel(categoryMonthlyStdDevs(transactions)));
         // Two deviation panes: after dropping excluded prefixes and anything
         // below the noise floor, split the survivors at their median std dev --
@@ -398,10 +408,10 @@ public final class SpendingPlot {
             if (sd.total() >= DEVIATION_MIN_STDDEV && !isDeviationExcluded(sd.category()))
                 ranked.add(sd.category());
         int mid = (ranked.size() + 1) / 2;                // high half keeps the odd one
-        tabs.addTab("High Deviation", deviationPanel(transactions,
-                new HashSet<>(ranked.subList(0, mid))));
-        tabs.addTab("Low Deviation", deviationPanel(transactions,
-                new HashSet<>(ranked.subList(mid, ranked.size()))));
+        tabs.addTab("High Deviation", track(deviationPanel(transactions,
+                new HashSet<>(ranked.subList(0, mid))), removed, linePanels));
+        tabs.addTab("Low Deviation", track(deviationPanel(transactions,
+                new HashSet<>(ranked.subList(mid, ranked.size()))), removed, linePanels));
 
         // Fifth pane: total monthly spending as one series, plotted as its
         // dollar deviation from the overall monthly mean.
@@ -411,8 +421,22 @@ public final class SpendingPlot {
             totalTxns.add(new Transaction(t.date(), "Total", t.payee(), t.amount()));
             grand += t.amount();
         }
-        tabs.addTab("Total Deviation", new TimeSeriesPanel(totalTxns,
-                List.of(new CategoryTotal("Total", grand)), true));
+        tabs.addTab("Total Deviation", track(new TimeSeriesPanel(totalTxns,
+                List.of(new CategoryTotal("Total", grand)), true), removed, linePanels));
+
+        // Toolbar with a button to re-hide the categories removed last time.
+        JButton resume = new JButton("Resume where I left off");
+        resume.addActionListener(_ -> {
+            for (String cat : loadRemovedCategories(REMOVED_CATEGORIES_FILE))
+                for (TimeSeriesPanel p : linePanels) p.removeCategory(cat);
+        });
+        JPanel toolbar = new JPanel(new FlowLayout(FlowLayout.LEFT));
+        toolbar.add(resume);
+        frame.add(toolbar, BorderLayout.NORTH);
+
+        // Persist the removed set however the app exits (manual close or timer).
+        Runtime.getRuntime().addShutdownHook(
+                new Thread(() -> saveRemovedCategories(removed, REMOVED_CATEGORIES_FILE)));
 
         frame.add(tabs, BorderLayout.CENTER);
         // Cap to the usable screen area (excludes the Windows taskbar) so the
@@ -435,6 +459,45 @@ public final class SpendingPlot {
         for (Transaction t : transactions)
             if (keep.contains(t.category())) devTxns.add(t);
         return new TimeSeriesPanel(devTxns, categoryTotals(devTxns), true);
+    }
+
+    /** Wires a line panel to the shared removed-set and registry, then returns it. */
+    private static TimeSeriesPanel track(TimeSeriesPanel panel, Set<String> removed,
+                                         List<TimeSeriesPanel> registry) {
+        panel.setRemovedSink(removed);
+        registry.add(panel);
+        return panel;
+    }
+
+    /** Writes the removed categories to a properties file (one per numbered key). */
+    private static void saveRemovedCategories(Set<String> removed, Path file) {
+        Properties p = new Properties();
+        int i = 0;
+        for (String c : removed) p.setProperty("removed." + (i++), c);
+        try (var out = Files.newOutputStream(file)) {
+            p.store(out, "Categories removed from the charts");
+        } catch (IOException e) {
+            System.err.println("Could not save " + file + ": " + e.getMessage());
+        }
+    }
+
+    /** Reads back the removed categories saved by {@link #saveRemovedCategories}. */
+    private static List<String> loadRemovedCategories(Path file) {
+        List<String> out = new ArrayList<>();
+        if (!Files.exists(file)) return out;
+        Properties p = new Properties();
+        try (var in = Files.newInputStream(file)) {
+            p.load(in);
+        } catch (IOException e) {
+            System.err.println("Could not read " + file + ": " + e.getMessage());
+            return out;
+        }
+        p.stringPropertyNames().stream()
+                .filter(k -> k.startsWith("removed."))
+                .sorted(Comparator.comparingInt(
+                        k -> Integer.parseInt(k.substring("removed.".length()))))
+                .forEach(k -> out.add(p.getProperty(k)));
+        return out;
     }
 
     private static Color seriesColor(int i) {
@@ -622,12 +685,22 @@ public final class SpendingPlot {
             });
         }
 
+        /** Records every category removed from this chart, if set (shared across charts). */
+        void setRemovedSink(Set<String> sink) { this.removedSink = sink; }
+
+        /** Removes a category by name (used by the Resume button); no-op if absent. */
+        void removeCategory(String category) {
+            int i = series.indexOf(category);
+            if (i >= 0) removeSeries(i);
+        }
+
         /** Removes one category's line from this chart (right-click on its legend). */
         private void removeSeries(int i) {
             if (i < 0 || i >= series.size()) return;
             String removed = series.remove(i);
             values.remove(removed);
             topSet.remove(removed);
+            if (removedSink != null) removedSink.add(removed);
             if (selSeries == i) selSeries = -1;
             else if (selSeries > i) selSeries--;
             selMonth = -1;
@@ -868,6 +941,7 @@ public final class SpendingPlot {
         private int selSeries = -1, selMonth = -1;       // selected point, -1 = none
         private final List<Rectangle> legendHit = new ArrayList<>(); // legend row hit boxes
         private boolean pressing;                        // true while a legend label is held
+        private Set<String> removedSink;                 // collects removed categories, if set
     }
 
     /** A plain table of each category and its monthly-spending standard deviation. */
@@ -947,6 +1021,10 @@ public final class SpendingPlot {
      * include everything. Undated transactions are never dropped by this filter.
      */
     private static final LocalDate START_DATE = LocalDate.of(2025, 1, 1); // null = no filter
+
+    /** Where categories removed from the charts are saved between runs. */
+    private static final Path REMOVED_CATEGORIES_FILE =
+            Path.of("removed-categories.properties");
 
     /**
      * Deviation panes only: categories whose monthly spending std dev is below

@@ -83,6 +83,9 @@ testfile.txt
 /all.csv
 /uncategorized-checks.csv
 
+# Per-user chart state
+/removed-categories.properties
+
 ###############################################################################
 # Coverage / analysis tools (if enabled later)
 ###############################################################################
