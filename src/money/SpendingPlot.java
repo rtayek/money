@@ -57,7 +57,7 @@ public final class SpendingPlot {
     record Txn(LocalDate date, String category, String payee, double amount) {}
 
     /** Max distinct category lines drawn on the time chart; the rest = "Other". */
-    private static final int MAX_SERIES = 20;
+    private static final int MAX_SERIES = 50;
 
     /**
      * Categories to omit entirely. Account-to-account transfers and card
