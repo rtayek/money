@@ -1,5 +1,6 @@
 package money;
 
+import java.awt.AWTEvent;
 import java.awt.BasicStroke;
 import java.awt.BorderLayout;
 import java.awt.Color;
@@ -9,6 +10,7 @@ import java.awt.Graphics;
 import java.awt.Graphics2D;
 import java.awt.Rectangle;
 import java.awt.RenderingHints;
+import java.awt.Toolkit;
 import java.awt.Window;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
@@ -517,6 +519,10 @@ public final class SpendingPlot {
     @SuppressWarnings("serial")
     static final class TimeSeriesPanel extends JPanel {
 
+        /**
+         * Closes {@code window} after {@code minutes} of inactivity. Any keyboard
+         * or mouse activity anywhere in the app restarts the countdown.
+         */
         static Timer closeAfter(Window window, int minutes) {
             Timer timer = new Timer(minutes * 60 * 1000, _ -> {
                 window.dispose();
@@ -524,8 +530,13 @@ public final class SpendingPlot {
                 // Use this only if closing the window must terminate the entire app:
                 // System.exit(0);
             });
-
             timer.setRepeats(false);
+
+            // Reset the countdown on any key press / mouse move / click / wheel.
+            long mask = AWTEvent.KEY_EVENT_MASK | AWTEvent.MOUSE_EVENT_MASK
+                    | AWTEvent.MOUSE_MOTION_EVENT_MASK | AWTEvent.MOUSE_WHEEL_EVENT_MASK;
+            Toolkit.getDefaultToolkit().addAWTEventListener(_ -> timer.restart(), mask);
+
             timer.start();
             return timer;
         }
@@ -935,14 +946,14 @@ public final class SpendingPlot {
      * Charts/stats include only spending on or after this date; set to null to
      * include everything. Undated transactions are never dropped by this filter.
      */
-    private static final LocalDate START_DATE = LocalDate.of(2026, 1, 1); // null = no filter
+    private static final LocalDate START_DATE = LocalDate.of(2025, 1, 1); // null = no filter
 
     /**
      * Deviation panes only: categories whose monthly spending std dev is below
      * this many dollars are dropped as noise. The survivors are then split at
      * their median into the High and Low deviation panes.
      */
-    private static final double DEVIATION_MIN_STDDEV = 20;
+    private static final double DEVIATION_MIN_STDDEV = 50;
 
     /**
      * Deviation pane only: category name prefixes always dropped regardless of
