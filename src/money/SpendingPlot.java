@@ -9,6 +9,7 @@ import java.awt.Graphics;
 import java.awt.Graphics2D;
 import java.awt.Rectangle;
 import java.awt.RenderingHints;
+import java.awt.Window;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.awt.geom.Rectangle2D;
@@ -41,6 +42,7 @@ import javax.swing.JScrollPane;
 import javax.swing.JTabbedPane;
 import javax.swing.JTable;
 import javax.swing.JTextArea;
+import javax.swing.Timer;
 import javax.swing.SwingConstants;
 import javax.swing.SwingUtilities;
 import javax.swing.filechooser.FileNameExtensionFilter;
@@ -64,6 +66,9 @@ public final class SpendingPlot {
 
     /** Max distinct category lines drawn on the time chart; the rest = "Other". */
     private static final int MAX_SERIES = 100;
+
+    /** Close the chart window after this many minutes. */
+    private static final int AUTO_CLOSE_MINUTES = 10;
 
     /**
      * Deviation pane only: categories whose monthly spending std dev is below
@@ -423,6 +428,17 @@ public final class SpendingPlot {
         frame.setSize(Math.min(960, scr.width), Math.min(wantH, scr.height));
         frame.setLocationRelativeTo(null);
         frame.setVisible(true);
+        closeAfter(frame, AUTO_CLOSE_MINUTES);
+    }
+
+    /** Starts a one-shot Swing timer that closes the supplied window. */
+    static Timer closeAfter(Window window, int minutes) {
+        if (minutes <= 0) throw new IllegalArgumentException("minutes must be positive");
+        int delayMillis = Math.multiplyExact(minutes, 60_000);
+        Timer timer = new Timer(delayMillis, event -> window.dispose());
+        timer.setRepeats(false);
+        timer.start();
+        return timer;
     }
 
     private static Color seriesColor(int i) {
