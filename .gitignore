@@ -82,6 +82,8 @@ testfile.txt
 ###############################################################################
 /all.csv
 /uncategorized-checks.csv
+/recurring-charges-review.csv
+/recurring-charges-summary.md
 
 # Per-user chart state
 /removed-categories.properties
