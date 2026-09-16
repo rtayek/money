@@ -12,6 +12,7 @@ This is primarily a data-review task. Do not modify the original CSV or automati
 - Work from the local repository checkout used by Anti-Gravity.
 - Input file: `all.csv` in the repository root.
 - `all.csv` is intentionally gitignored because it contains private financial information. It is not available from GitHub.
+- Optional input: `amazon-order-history.csv` in the repository root (also gitignored), if Ray has provided one -- see the Amazon section below for how to use it.
 - Expected columns: `Date`, `Account`, `Reviewed`, `Payee`, `Category`, `Exclusion`, and `Amount`.
 - If the full `all.csv` is absent, stop and ask Ray to export it from Simplifi and place it in the repository root. Do not ask him to commit it.
 
@@ -67,6 +68,55 @@ For every likely recurring charge:
 
 Use the existing category vocabulary in the CSV when possible. Do not invent a new category hierarchy unless the existing categories are clearly inadequate.
 
+## Platform payees with hidden sub-detail (Amazon, Google, and similar)
+
+Some payees are platforms that bundle many different underlying purchases or
+subscriptions under one generic name. The bank feed never carries item-level
+detail for these, so handle them differently from an ordinary merchant.
+
+### Google (and similar subscription platforms, e.g. Apple)
+
+- Group the payee's transactions by exact amount, not just by date pattern.
+  Distinct recurring amounts (e.g. $1.99, $3.99, $13.99) almost always
+  correspond to distinct underlying subscriptions billed through the same
+  platform. Treat each distinct amount as its own recurring-charge candidate,
+  even though the payee text is identical across all of them.
+- Flag when the same amount is currently split across multiple categories
+  (for example, some $1.99 charges filed as "Utilities:Internet & Cable",
+  others "Uncategorized", others something unrelated) -- this is a strong
+  `Inconsistent` signal and should be called out explicitly.
+- Do not guess which specific subscription (YouTube Premium, Google One,
+  etc.) an amount corresponds to; there's no way to tell from the CSV alone.
+  Note in the summary that identifying the exact service requires checking
+  the account's subscriptions page (e.g. myaccount.google.com/subscriptions)
+  and matching by price, and mark these `Needs Ray's review`.
+
+### Amazon (and similar marketplaces)
+
+- Amazon purchases are not fixed-amount recurring charges -- amounts vary
+  per order. Keep them under "Repeated discretionary merchant" per the rules
+  above, not as a subscription.
+- Do not invent categories for individual Amazon charges from the CSV alone;
+  there isn't enough information in a bank feed to know what was bought.
+- If an Amazon order-history export is present at
+  `amazon-order-history.csv` in the repository root (date, item description,
+  amount columns), match its rows to the CSV's Amazon transactions by date
+  and amount, and use the item description to recommend a specific category
+  per matched transaction. Only recommend a category when the match is
+  unambiguous (a unique date+amount pair); otherwise mark `Needs Ray's
+  review`.
+- If no order-history export is available, say so explicitly in the summary
+  and name it as the blocking step for real Amazon categorization, rather
+  than silently skipping it.
+
+### Any other bundling payee
+
+If another payee shows the same pattern -- many transactions, one generic
+name, categories that are inconsistent or all generic -- apply the same
+two-part approach: cluster by fixed amount to surface hidden subscriptions,
+and note where a merchant-provided export would be needed to categorize
+variable-amount purchases.
+
 ## Required output
 
 Create these private, generated files:
@@ -104,6 +154,12 @@ Do not paste hundreds of raw transactions into the summary. Include enough dates
 
 - Report the number of CSV rows read and the date range.
 - Reconcile the candidate groups back to their source transactions.
+- Check for likely duplicate bookings: the same date, amount, and payee (or
+  near-identical payee) appearing under two different `Account` values. This
+  usually means the same card or account got linked into Simplifi twice and
+  is double-counting those charges. Report these separately from ordinary
+  recurring charges -- as a possible account-linking problem, since it can
+  inflate totals for the affected payee.
 - Confirm excluded rows and positive amounts did not enter recurring-spending totals.
 - Spot-check monthly, quarterly, and annual candidates.
 - Check that no generated report is tracked by Git.
