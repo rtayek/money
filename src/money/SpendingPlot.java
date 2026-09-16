@@ -13,8 +13,11 @@ import java.awt.Rectangle;
 import java.awt.RenderingHints;
 import java.awt.Toolkit;
 import java.awt.Window;
+import java.awt.event.AWTEventListener;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
+import java.awt.event.WindowAdapter;
+import java.awt.event.WindowEvent;
 import java.awt.geom.Rectangle2D;
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -587,18 +590,25 @@ public final class SpendingPlot {
          * or mouse activity anywhere in the app restarts the countdown.
          */
         static Timer closeAfter(Window window, int minutes) {
-            Timer timer = new Timer(minutes * 60 * 1000, _ -> {
-                window.dispose();
-
-                // Use this only if closing the window must terminate the entire app:
-                // System.exit(0);
-            });
+            if (minutes <= 0) throw new IllegalArgumentException("minutes must be positive");
+            int delayMillis = Math.multiplyExact(minutes, 60_000);
+            Timer timer = new Timer(delayMillis, _ -> window.dispose());
             timer.setRepeats(false);
 
             // Reset the countdown on any key press / mouse move / click / wheel.
             long mask = AWTEvent.KEY_EVENT_MASK | AWTEvent.MOUSE_EVENT_MASK
                     | AWTEvent.MOUSE_MOTION_EVENT_MASK | AWTEvent.MOUSE_WHEEL_EVENT_MASK;
-            Toolkit.getDefaultToolkit().addAWTEventListener(_ -> timer.restart(), mask);
+            AWTEventListener idleReset = _ -> timer.restart();
+            Toolkit toolkit = Toolkit.getDefaultToolkit();
+            toolkit.addAWTEventListener(idleReset, mask);
+
+            // A toolkit listener is global, so release it with the window.
+            window.addWindowListener(new WindowAdapter() {
+                @Override public void windowClosed(WindowEvent event) {
+                    timer.stop();
+                    toolkit.removeAWTEventListener(idleReset);
+                }
+            });
 
             timer.start();
             return timer;
@@ -699,7 +709,6 @@ public final class SpendingPlot {
             if (i < 0 || i >= series.size()) return;
             String removed = series.remove(i);
             values.remove(removed);
-            topSet.remove(removed);
             if (removedSink != null) removedSink.add(removed);
             if (selSeries == i) selSeries = -1;
             else if (selSeries > i) selSeries--;
@@ -935,7 +944,7 @@ public final class SpendingPlot {
         private final NumberFormat money = NumberFormat.getCurrencyInstance(Locale.US);
         private final DateTimeFormatter xFmt = DateTimeFormatter.ofPattern("MMM ''yy", Locale.US);
         private final List<Transaction> txns;                    // retained for point drill-down
-        private final Set<String> topSet;                // categories drawn as their own line
+        private final Set<String> topSet;                // original categories grouped as their own line
         private final boolean hasOther;                  // whether an "Other" line exists
         private int[][] ptX, ptY;                        // last-painted point coords [series][month]
         private int selSeries = -1, selMonth = -1;       // selected point, -1 = none
