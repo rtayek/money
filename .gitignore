@@ -84,6 +84,11 @@ testfile.txt
 /recurring-charges-review.csv
 /recurring-charges-summary.md
 /amazon-order-history.csv
+/plaid-transactions.csv
+/amazon-recurring-charges.md
+
+# LibreOffice/OpenOffice lock files
+.~lock.*#
 
 # Per-user chart state
 /removed-categories.properties
