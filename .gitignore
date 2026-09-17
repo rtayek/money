@@ -83,6 +83,7 @@ testfile.txt
 /uncategorized-checks.csv
 /recurring-charges-review.csv
 /recurring-charges-summary.md
+/amazon-order-history.csv
 
 # Per-user chart state
 /removed-categories.properties
