@@ -54,8 +54,10 @@ public final class CategorizationAudit {
     public void run() {
         List<Entry> formatA = load(quickenCsv, FORMAT_A_DATE, FORMAT_A_PAYEE, FORMAT_A_AMOUNT);
         List<Entry> formatB = load(plaidCsv, FORMAT_B_DATE, FORMAT_B_TEXT, FORMAT_B_AMOUNT);
+        Map<String, List<Entry>> indexA = indexByKey(formatA);
         Map<String, List<Entry>> indexB = indexByKey(formatB);
         printAudit(formatA, formatB, indexB);
+        printScorecard(formatA, formatB, indexA, indexB);
     }
 
     static String cleanPayee(String raw) {
@@ -98,6 +100,41 @@ public final class CategorizationAudit {
         System.out.printf(Locale.US,
                 "Format A rows: %d, Format B rows: %d, A rows matched to B by rule key: %d%n",
                 formatA.size(), formatB.size(), matched);
+    }
+
+    private void printScorecard(List<Entry> formatA, List<Entry> formatB,
+                                Map<String, List<Entry>> indexA, Map<String, List<Entry>> indexB) {
+        int passB = 0;
+        List<Entry> failsB = new ArrayList<>();
+        for (Entry b : formatB) {
+            if (indexA.containsKey(b.key())) passB++;
+            else failsB.add(b);
+        }
+        int totalB = formatB.size();
+        double rateB = totalB == 0 ? 0 : 100.0 * passB / totalB;
+
+        int sharedKeys = 0;
+        for (String k : indexB.keySet()) if (indexA.containsKey(k)) sharedKeys++;
+
+        System.out.println();
+        System.out.println("SCORECARD (does each Plaid row map onto a Quicken row by rule key?)");
+        System.out.printf(Locale.US, "  PASS (matched):   %4d%n", passB);
+        System.out.printf(Locale.US, "  FAIL (no match):  %4d%n", failsB.size());
+        System.out.printf(Locale.US, "  Match rate:       %5.1f%%%n", rateB);
+        System.out.printf(Locale.US, "  Rule keys: %d in A, %d in B, %d shared%n",
+                indexA.size(), indexB.size(), sharedKeys);
+
+        if (!failsB.isEmpty()) {
+            System.out.println("  Unmatched Plaid rows (FAIL):");
+            String fmt = "    %-13s  %11s  %-22s  %s%n";
+            for (Entry f : failsB) {
+                System.out.printf(Locale.US, fmt,
+                        trunc(f.date(), 13),
+                        String.format(Locale.US, "%.2f", f.amount()),
+                        trunc(f.key(), 22),
+                        trunc(f.rawSource(), 40));
+            }
+        }
     }
 
     private static List<Entry> load(Path csv, String dateHeader, String textHeader, String amountHeader) {
