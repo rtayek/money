@@ -17,6 +17,7 @@
 .settings/org.eclipse.buildship.core.prefs
 .settings/org.eclipse.jdt.ui.prefs
 .settings/org.eclipse.ui.ide.prefs
+bin/
 
 # Keep these (DO NOT ignore)
 !.classpath
