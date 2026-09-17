@@ -1060,9 +1060,9 @@ public final class SpendingPlot {
                     "Personal Income", "Personal Income:Paycheck",
                     "Personal Income:Interest Earned");
 
-    /** Where the uncategorized-checks report is written, matching the old standalone tool's default. */
+    /** Where the uncategorized-checks report is written, matching UncategorizedCheckReport's default. */
     private static final Path UNCATEGORIZED_CHECKS_OUTPUT =
-            Path.of("uncategorized-checks.csv");
+            Path.of("build", "reports", "uncategorized-checks.csv");
 
     /** Payee pattern for a paper check, e.g. "Check 1234". */
     private static final Pattern CHECK_PAYEE =
