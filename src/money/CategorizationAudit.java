@@ -5,21 +5,22 @@ import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.LocalDate;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
-import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * Phase 1 audit. Ingests two financial CSV layouts, cleans the merchant text
- * with regex, builds a deterministic rule key of cleanedPayee + "_" + abs(amount),
- * and prints an aligned table predicting how Format A rows map onto Format B.
+ * Audits how Plaid transactions map onto Simplifi transactions. A match requires
+ * the same merchant token and amount, opposite source-specific signs, and dates
+ * within two days. Each row can be used only once; tied candidates are reported
+ * as ambiguous instead of silently counted as a clean match.
  *
- * Format A (Quicken all.csv): Date,Account,Check #,Reviewed,Payee,Category,Exclusion,Amount
- * Format B (Plaid/AmEx):      Date,Name,MerchantName,OriginalDescription,Category,Amount
+ * Format A (Simplifi all.csv): Date,Account,Check #,Reviewed,Payee,Category,Exclusion,Amount
+ * Format B (Plaid/AmEx):       Date,Name,MerchantName,OriginalDescription,Category,Amount
  *
  * Run: java -p out -m money/money.CategorizationAudit [quickenCsv] [plaidCsv]
  * (defaults are in main). The run is passive: it reads the files and prints;
@@ -35,10 +36,7 @@ public final class CategorizationAudit {
     private static final String FORMAT_B_TEXT = "OriginalDescription";
     private static final String FORMAT_B_AMOUNT = "Amount";
 
-    // Strip a leading payment-processor tag such as "TST*", "SQ*", "PAR*", "SC*".
     private static final Pattern PROCESSOR_PREFIX = Pattern.compile("^[A-Z]{2,5}\\*+\\s*");
-    // Capture the leading merchant token and drop the trailing reference blob,
-    // e.g. "AMAZON DIGIT*6693T8P888" -> "AMAZON", "GOOGLE *AI" -> "GOOGLE".
     private static final Pattern LEADING_TOKEN = Pattern.compile("^([A-Z0-9&'\\-]+)");
 
     public static void main(String[] args) {
@@ -53,12 +51,12 @@ public final class CategorizationAudit {
     }
 
     public void run() {
-        List<Entry> formatA = load(quickenCsv, FORMAT_A_DATE, FORMAT_A_PAYEE, FORMAT_A_AMOUNT);
-        List<Entry> formatB = load(plaidCsv, FORMAT_B_DATE, FORMAT_B_TEXT, FORMAT_B_AMOUNT);
-        Map<String, List<Entry>> indexA = indexByKey(formatA);
-        Map<String, List<Entry>> indexB = indexByKey(formatB);
-        printAudit(formatA, formatB, indexB);
-        printScorecard(formatA, formatB, indexA, indexB);
+        List<Entry> quicken = load(quickenCsv,
+                FORMAT_A_DATE, FORMAT_A_PAYEE, FORMAT_A_AMOUNT, true);
+        List<Entry> plaid = load(plaidCsv,
+                FORMAT_B_DATE, FORMAT_B_TEXT, FORMAT_B_AMOUNT, false);
+        Audit audit = match(quicken, plaid);
+        printAudit(audit, quicken.size(), plaid.size());
     }
 
     static String cleanPayee(String raw) {
@@ -69,93 +67,134 @@ public final class CategorizationAudit {
         return m.find() ? m.group(1) : noPrefix;
     }
 
-    static String ruleKey(String cleanedPayee, double amount) {
-        return cleanedPayee + "_" + String.format(Locale.US, "%.2f", Math.abs(amount));
-    }
+    private static Audit match(List<Entry> quicken, List<Entry> plaid) {
+        boolean[] usedQuicken = new boolean[quicken.size()];
+        List<Match> matches = new ArrayList<>();
+        List<Entry> unmatchedPlaid = new ArrayList<>();
 
-    private static Map<String, List<Entry>> indexByKey(List<Entry> rows) {
-        Map<String, List<Entry>> index = new LinkedHashMap<>();
-        for (Entry e : rows) index.computeIfAbsent(e.key(), k -> new ArrayList<>()).add(e);
-        return index;
-    }
+        for (Entry p : plaid) {
+            long bestDays = Long.MAX_VALUE;
+            List<Integer> best = new ArrayList<>();
+            for (int i = 0; i < quicken.size(); i++) {
+                if (usedQuicken[i]) continue;
+                Entry q = quicken.get(i);
+                if (!candidate(q, p)) continue;
+                long days = Math.abs(ChronoUnit.DAYS.between(q.date(), p.date()));
+                if (days < bestDays) {
+                    bestDays = days;
+                    best.clear();
+                    best.add(i);
+                } else if (days == bestDays) {
+                    best.add(i);
+                }
+            }
 
-    private void printAudit(List<Entry> formatA, List<Entry> formatB, Map<String, List<Entry>> indexB) {
-        String fmt = "%-13s  %-20s  %-12s  %11s  %-22s  %-34s%n";
-        System.out.printf(fmt, "DATE", "SOURCE PAYEE (A)", "CLEANED", "AMOUNT", "RULE KEY", "PLAID PREDICTION (B)");
-        System.out.printf(fmt, dashes(13), dashes(20), dashes(12), dashes(11), dashes(22), dashes(34));
+            if (best.isEmpty()) {
+                unmatchedPlaid.add(p);
+                continue;
+            }
 
-        int matched = 0;
-        for (Entry a : formatA) {
-            List<Entry> hits = indexB.get(a.key());
-            if (hits == null) continue;
-            matched++;
-            System.out.printf(fmt,
-                    trunc(a.date(), 13),
-                    trunc(a.rawSource(), 20),
-                    trunc(a.cleaned(), 12),
-                    String.format(Locale.US, "%.2f", a.amount()),
-                    trunc(a.key(), 22),
-                    trunc(hits.get(0).rawSource(), 34));
+            int chosen = best.get(0);
+            usedQuicken[chosen] = true;
+            matches.add(new Match(quicken.get(chosen), p, best.size() > 1));
         }
-        System.out.println();
-        System.out.printf(Locale.US,
-                "Format A rows: %d, Format B rows: %d, A rows matched to B by rule key: %d%n",
-                formatA.size(), formatB.size(), matched);
+        return new Audit(matches, unmatchedPlaid);
     }
 
-    private void printScorecard(List<Entry> formatA, List<Entry> formatB,
-                                Map<String, List<Entry>> indexA, Map<String, List<Entry>> indexB) {
-        int passB = 0;
-        List<Entry> failsB = new ArrayList<>();
-        for (Entry b : formatB) {
-            if (indexA.containsKey(b.key())) passB++;
-            else failsB.add(b);
+    private static boolean candidate(Entry quicken, Entry plaid) {
+        if (quicken.date() == null || plaid.date() == null) return false;
+        if (quicken.cleaned().isEmpty() || !quicken.cleaned().equals(plaid.cleaned())) return false;
+        if (Math.abs(Math.abs(quicken.amount()) - Math.abs(plaid.amount())) > AMOUNT_TOLERANCE) {
+            return false;
         }
-        int totalB = formatB.size();
-        double rateB = totalB == 0 ? 0 : 100.0 * passB / totalB;
+        if (!sameTransactionDirection(quicken.amount(), plaid.amount())) return false;
+        return Math.abs(ChronoUnit.DAYS.between(quicken.date(), plaid.date()))
+                <= DATE_TOLERANCE_DAYS;
+    }
 
-        int sharedKeys = 0;
-        for (String k : indexB.keySet()) if (indexA.containsKey(k)) sharedKeys++;
+    /**
+     * Simplifi records spending as negative while Plaid records spending as
+     * positive, so corresponding transactions normally have opposite signs.
+     */
+    private static boolean sameTransactionDirection(double simplifiAmount, double plaidAmount) {
+        if (simplifiAmount == 0 || plaidAmount == 0) {
+            return simplifiAmount == 0 && plaidAmount == 0;
+        }
+        return Math.signum(simplifiAmount) == -Math.signum(plaidAmount);
+    }
+
+    private static void printAudit(Audit audit, int quickenCount, int plaidCount) {
+        String fmt = "%-12s  %-20s  %-12s  %11s  %-10s  %-34s%n";
+        System.out.printf(fmt, "DATE", "SIMPLIFI PAYEE", "TOKEN", "AMOUNT", "STATUS", "PLAID DESCRIPTION");
+        System.out.printf(fmt, dashes(12), dashes(20), dashes(12), dashes(11), dashes(10), dashes(34));
+
+        int ambiguous = 0;
+        for (Match m : audit.matches()) {
+            if (m.ambiguous()) ambiguous++;
+            Entry q = m.quicken();
+            System.out.printf(Locale.US, fmt,
+                    q.date(),
+                    trunc(q.rawSource(), 20),
+                    trunc(q.cleaned(), 12),
+                    String.format(Locale.US, "%.2f", q.amount()),
+                    m.ambiguous() ? "AMBIGUOUS" : "MATCH",
+                    trunc(m.plaid().rawSource(), 34));
+        }
+
+        int cleanMatches = audit.matches().size() - ambiguous;
+        int failed = audit.unmatchedPlaid().size();
+        double cleanRate = plaidCount == 0 ? 0 : 100.0 * cleanMatches / plaidCount;
 
         System.out.println();
-        System.out.println("SCORECARD (does each Plaid row map onto a Quicken row by rule key?)");
-        System.out.printf(Locale.US, "  PASS (matched):   %4d%n", passB);
-        System.out.printf(Locale.US, "  FAIL (no match):  %4d%n", failsB.size());
-        System.out.printf(Locale.US, "  Match rate:       %5.1f%%%n", rateB);
-        System.out.printf(Locale.US, "  Rule keys: %d in A, %d in B, %d shared%n",
-                indexA.size(), indexB.size(), sharedKeys);
+        System.out.println("SCORECARD (one-to-one Plaid to Simplifi matching)");
+        System.out.printf(Locale.US, "  PASS (unique match): %4d%n", cleanMatches);
+        System.out.printf(Locale.US, "  AMBIGUOUS:           %4d%n", ambiguous);
+        System.out.printf(Locale.US, "  FAIL (no match):     %4d%n", failed);
+        System.out.printf(Locale.US, "  Clean match rate:    %5.1f%%%n", cleanRate);
+        System.out.printf(Locale.US, "  Simplifi rows: %d, Plaid rows: %d%n",
+                quickenCount, plaidCount);
 
-        if (!failsB.isEmpty()) {
-            System.out.println("  Unmatched Plaid rows (FAIL):");
-            String fmt = "    %-13s  %11s  %-22s  %s%n";
-            for (Entry f : failsB) {
-                System.out.printf(Locale.US, fmt,
-                        trunc(f.date(), 13),
+        if (!audit.unmatchedPlaid().isEmpty()) {
+            System.out.println("  Unmatched Plaid rows:");
+            String failFmt = "    %-12s  %11s  %-12s  %s%n";
+            for (Entry f : audit.unmatchedPlaid()) {
+                System.out.printf(Locale.US, failFmt,
+                        f.date(),
                         String.format(Locale.US, "%.2f", f.amount()),
-                        trunc(f.key(), 22),
+                        trunc(f.cleaned(), 12),
                         trunc(f.rawSource(), 40));
             }
         }
     }
 
-    private static List<Entry> load(Path csv, String dateHeader, String textHeader, String amountHeader) {
+    private static List<Entry> load(Path csv, String dateHeader, String textHeader,
+                                    String amountHeader, boolean simplifi) {
         List<String> lines = readAllLines(csv);
         if (lines.isEmpty()) return List.of();
         List<String> header = parseCsvLine(lines.get(0));
         int dateCol = indexOfHeader(header, dateHeader);
         int textCol = indexOfHeader(header, textHeader);
         int amtCol = indexOfHeader(header, amountHeader);
+        int exclusionCol = simplifi ? indexOfHeader(header, "Exclusion") : -1;
+        int merchantCol = simplifi ? -1 : indexOfHeader(header, "MerchantName");
+        int nameCol = simplifi ? -1 : indexOfHeader(header, "Name");
+        if (dateCol < 0 || textCol < 0 || amtCol < 0) {
+            throw new IllegalStateException("Missing required CSV columns in " + csv + ": " + header);
+        }
 
         List<Entry> rows = new ArrayList<>();
         for (int i = 1; i < lines.size(); i++) {
             String raw = lines.get(i);
             if (raw.isBlank()) continue;
             List<String> f = parseCsvLine(raw);
-            String date = field(f, dateCol);
+            if (simplifi && field(f, exclusionCol).equalsIgnoreCase("yes")) continue;
+
+            LocalDate date = SpendingPlot.parseDate(field(f, dateCol));
             String text = field(f, textCol);
+            if (!simplifi && text.isBlank()) text = field(f, merchantCol);
+            if (!simplifi && text.isBlank()) text = field(f, nameCol);
             double amount = parseAmount(field(f, amtCol));
-            String cleaned = cleanPayee(text);
-            rows.add(new Entry(date, text, cleaned, amount, ruleKey(cleaned, amount)));
+            rows.add(new Entry(date, text, cleanPayee(text), amount));
         }
         return rows;
     }
@@ -240,7 +279,12 @@ public final class CategorizationAudit {
         return s.length() <= n ? s : s.substring(0, n - 1) + ".";
     }
 
-    record Entry(String date, String rawSource, String cleaned, double amount, String key) {}
+    record Entry(LocalDate date, String rawSource, String cleaned, double amount) {}
+    record Match(Entry quicken, Entry plaid, boolean ambiguous) {}
+    record Audit(List<Match> matches, List<Entry> unmatchedPlaid) {}
+
+    private static final int DATE_TOLERANCE_DAYS = 2;
+    private static final double AMOUNT_TOLERANCE = 0.005;
 
     private final Path quickenCsv;
     private final Path plaidCsv;
