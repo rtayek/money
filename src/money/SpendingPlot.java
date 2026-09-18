@@ -75,7 +75,7 @@ public final class SpendingPlot {
 
     /** True if a category should be excluded from the deviation pane. */
     private static boolean isDeviationExcluded(String category) {
-        for (String prefix : DEVIATION_EXCLUDED)
+        for (String prefix : deviationExcluded)
             if (category.equals(prefix) || category.startsWith(prefix + ":")) return true;
         return false;
     }
@@ -147,7 +147,7 @@ public final class SpendingPlot {
      * Drops exact duplicates created when one real account is linked into
      * Simplifi twice (e.g. "Traditional Gold Card" and "American Express
      * Traditional Gold" carry the same charges). An account is treated as a
-     * mirror when at least {@link #MIRROR_FRACTION} of its rows have an exact
+     * mirror when at least {@link #mirrorFraction} of its rows have an exact
      * (date, payee, amount) twin in one other account; the smaller account's
      * mirrored rows are then removed. Duplicates are only collapsed across
      * different accounts, so genuine same-day repeats within one account are
@@ -213,7 +213,7 @@ public final class SpendingPlot {
         }
         for (String a : byAccount.keySet()) {
             int size = byAccount.get(a).size();
-            if (size < MIRROR_MIN_ROWS) continue;
+            if (size < mirrorMinRows) continue;
             String best = null;
             int bestOverlap = 0;
             for (String b : byAccount.keySet()) {
@@ -221,7 +221,7 @@ public final class SpendingPlot {
                 int ov = overlap(counts.get(a), counts.get(b));
                 if (ov > bestOverlap) { bestOverlap = ov; best = b; }
             }
-            if (best != null && bestOverlap >= MIRROR_FRACTION * size) {
+            if (best != null && bestOverlap >= mirrorFraction * size) {
                 int bSize = byAccount.get(best).size();
                 // strip the smaller account (ties: the later-sorting name), keep the other
                 if (size < bSize || (size == bSize && a.compareTo(best) > 0)) {
@@ -266,15 +266,15 @@ public final class SpendingPlot {
      * Narrows an unfiltered transaction list down to what the charts show:
      * outflows only (amount flipped to a positive spending magnitude), the
      * generic income/transfer categories dropped, anything before
-     * {@link #START_DATE} dropped, and the current (still-accumulating) month
+     * {@link #startDate} dropped, and the current (still-accumulating) month
      * dropped since it's only partial.
      */
     static List<Transaction> toSpendingTransactions(List<Transaction> all) {
         List<Transaction> out = new ArrayList<>();
         for (Transaction t : all) {
             if (t.amount() >= 0) continue; // only outflows count as spending
-            if (EXCLUDED_CATEGORIES.contains(t.category())) continue;
-            if (START_DATE != null && t.date() != null && t.date().isBefore(START_DATE)) continue;
+            if (excludedCategories.contains(t.category())) continue;
+            if (startDate != null && t.date() != null && t.date().isBefore(startDate)) continue;
             if (t.date() != null && YearMonth.from(t.date()).equals(YearMonth.now())) continue;
             out.add(new Transaction(t.date(), t.category(), t.payee(), -t.amount()));
         }
@@ -301,7 +301,7 @@ public final class SpendingPlot {
         List<CheckEntry> checks = new ArrayList<>();
         for (Transaction t : all) {
             if (!isUncategorized(t) || t.payee() == null) continue;
-            Matcher m = CHECK_PAYEE.matcher(t.payee().strip());
+            Matcher m = checkPayee.matcher(t.payee().strip());
             if (!m.matches()) continue;
             if (t.amount() >= 0) continue; // only paid-out checks
             checks.add(new CheckEntry(t.date(), m.group(1), -t.amount()));
@@ -356,7 +356,7 @@ public final class SpendingPlot {
         for (Transaction t : all) {
             if (!isUncategorized(t)) continue;
             if (t.amount() >= 0) continue; // only outflows
-            if (t.payee() != null && CHECK_PAYEE.matcher(t.payee().strip()).matches()) continue;
+            if (t.payee() != null && checkPayee.matcher(t.payee().strip()).matches()) continue;
             uncategorized.add(t);
         }
         uncategorized.sort(Comparator.comparing(Transaction::date,
@@ -433,7 +433,7 @@ public final class SpendingPlot {
         try {
             return LocalDate.parse(t); // ISO-8601 yyyy-MM-dd
         } catch (Exception ignore) { /* fall through */ }
-        for (String pat : DATE_PATTERNS) {
+        for (String pat : datePatterns) {
             try {
                 return LocalDate.parse(t, DateTimeFormatter.ofPattern(pat, Locale.US));
             } catch (Exception ignore) { /* try next */ }
@@ -530,7 +530,7 @@ public final class SpendingPlot {
         // top half in "High", bottom half in "Low".
         List<String> ranked = new ArrayList<>();          // sorted high std dev -> low
         for (CategoryTotal sd : categoryMonthlyStdDevs(transactions))
-            if (sd.total() >= DEVIATION_MIN_STDDEV && !isDeviationExcluded(sd.category()))
+            if (sd.total() >= deviationMinStddev && !isDeviationExcluded(sd.category()))
                 ranked.add(sd.category());
         int mid = (ranked.size() + 1) / 2;                // high half keeps the odd one
         tabs.addTab("High Deviation", track(deviationPanel(transactions,
@@ -552,7 +552,7 @@ public final class SpendingPlot {
         // Toolbar with a button to re-hide the categories removed last time.
         JButton resume = new JButton("Resume where I left off");
         resume.addActionListener(_ -> {
-            for (String cat : loadRemovedCategories(REMOVED_CATEGORIES_FILE))
+            for (String cat : loadRemovedCategories(removedCategoriesFile))
                 for (TimeSeriesPanel p : linePanels) p.removeCategory(cat);
         });
         JPanel toolbar = new JPanel(new FlowLayout(FlowLayout.LEFT));
@@ -561,7 +561,7 @@ public final class SpendingPlot {
 
         // Persist the removed set however the app exits (manual close or timer).
         Runtime.getRuntime().addShutdownHook(
-                new Thread(() -> saveRemovedCategories(removed, REMOVED_CATEGORIES_FILE)));
+                new Thread(() -> saveRemovedCategories(removed, removedCategoriesFile)));
 
         frame.add(tabs, BorderLayout.CENTER);
         // Cap to the usable screen area (excludes the Windows taskbar) so the
@@ -701,7 +701,7 @@ public final class SpendingPlot {
 
     /**
      * Multi-line chart of monthly spending, one line per category. Categories
-     * beyond the top {@link #MAX_SERIES} (by total) are combined into "Other".
+     * beyond the top {@link #maxSeries} (by total) are combined into "Other".
      * Transactions with an unparseable/missing date are skipped here.
      */
     @SuppressWarnings("serial")
@@ -744,10 +744,10 @@ public final class SpendingPlot {
             this.deviation = deviation;
             // Which categories get their own line; everything else -> "Other".
             List<String> top = new ArrayList<>();
-            for (int i = 0; i < totals.size() && i < MAX_SERIES; i++) {
+            for (int i = 0; i < totals.size() && i < maxSeries; i++) {
                 top.add(totals.get(i).category());
             }
-            boolean hasOther = totals.size() > MAX_SERIES;
+            boolean hasOther = totals.size() > maxSeries;
 
             TreeSet<YearMonth> monthSet = new TreeSet<>();
             for (Transaction t : txns) {
@@ -1136,31 +1136,31 @@ public final class SpendingPlot {
 
         List<CheckEntry> checks = findUncategorizedChecks(all);
         printUncategorizedChecks(checks);
-        writeUncategorizedChecks(checks, UNCATEGORIZED_CHECKS_OUTPUT);
+        writeUncategorizedChecks(checks, uncategorizedChecksOutput);
         System.out.printf(Locale.US, "Wrote %d uncategorized checks to %s%n",
-                checks.size(), UNCATEGORIZED_CHECKS_OUTPUT.toAbsolutePath());
+                checks.size(), uncategorizedChecksOutput.toAbsolutePath());
         printUncategorized(all);
     }
 
     // ---- fields -----------------------------------------------------------
 
     /** Min rows an account needs before it can be judged a duplicate link. */
-    private static final int MIRROR_MIN_ROWS = 20;
+    private static final int mirrorMinRows = 20;
 
     /** Fraction of an account's rows that must be exact twins of one other account to call it a mirror. */
-    private static final double MIRROR_FRACTION = 0.90;
+    private static final double mirrorFraction = 0.90;
 
     /** Max distinct category lines drawn on the time chart; the rest = "Other". */
-    private static final int MAX_SERIES = 100;
+    private static final int maxSeries = 100;
 
     /**
      * Charts/stats include only spending on or after this date; set to null to
      * include everything. Undated transactions are never dropped by this filter.
      */
-    private static final LocalDate START_DATE = LocalDate.of(2025, 1, 1); // null = no filter
+    private static final LocalDate startDate = LocalDate.of(2025, 1, 1); // null = no filter
 
     /** Where categories removed from the charts are saved between runs. */
-    private static final Path REMOVED_CATEGORIES_FILE =
+    private static final Path removedCategoriesFile =
             Path.of("removed-categories.properties");
 
     /**
@@ -1168,14 +1168,14 @@ public final class SpendingPlot {
      * this many dollars are dropped as noise. The survivors are then split at
      * their median into the High and Low deviation panes.
      */
-    private static final double DEVIATION_MIN_STDDEV = 50;
+    private static final double deviationMinStddev = 50;
 
     /**
      * Deviation pane only: category name prefixes always dropped regardless of
      * std dev (big, lumpy, irregular spikes that swamp the chart). A prefix like
      * "Auto & Transport" drops that category and all its sub-categories.
      */
-    private static final Set<String> DEVIATION_EXCLUDED =
+    private static final Set<String> deviationExcluded =
             Set.of("Taxes:Federal Tax", "Auto & Transport");
 
     /**
@@ -1183,20 +1183,20 @@ public final class SpendingPlot {
      * payments are dropped via the CSV's own "Exclusion" flag; this set only
      * removes income and Simplifi's generic transfer categories.
      */
-    private static final Set<String> EXCLUDED_CATEGORIES =
+    private static final Set<String> excludedCategories =
             Set.of("Credit Card Payment", "Transfer",
                     "Personal Income", "Personal Income:Paycheck",
                     "Personal Income:Interest Earned");
 
     /** Where the uncategorized-checks report is written, matching UncategorizedCheckReport's default. */
-    private static final Path UNCATEGORIZED_CHECKS_OUTPUT =
+    private static final Path uncategorizedChecksOutput =
             Path.of("build", "reports", "uncategorized-checks.csv");
 
     /** Payee pattern for a paper check, e.g. "Check 1234". */
-    private static final Pattern CHECK_PAYEE =
+    private static final Pattern checkPayee =
             Pattern.compile("(?i)^check\\s+(\\d+)\\s*$");
 
-    private static final String[] DATE_PATTERNS = {
+    private static final String[] datePatterns = {
         "MMM d, yyyy", "MMMM d, yyyy",          // Simplifi: "Sep 12, 2026"
         "M/d/yyyy", "MM/dd/yyyy", "M/d/yy", "MM/dd/yy",
         "yyyy/M/d", "M-d-yyyy", "MM-dd-yyyy", "d-MMM-yyyy", "d MMM yyyy"

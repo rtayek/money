@@ -18,24 +18,13 @@ import java.util.regex.Pattern;
 /** Writes a small lookup list for uncategorized paper checks in a Simplifi CSV export. */
 public final class UncategorizedCheckReport {
 
-    private static final Path DEFAULT_INPUT = Path.of("all.csv");
-    private static final Path DEFAULT_OUTPUT =
-            Path.of("build", "reports", "uncategorized-checks.csv");
-    private static final Pattern CHECK_PAYEE =
-            Pattern.compile("(?i)^check\\s+(\\d+)\\s*$");
-    private static final String[] DATE_PATTERNS = {
-        "MMM d, yyyy", "MMMM d, yyyy", "M/d/yyyy", "MM/dd/yyyy",
-        "M/d/yy", "MM/dd/yy", "yyyy/M/d", "M-d-yyyy", "MM-dd-yyyy",
-        "d-MMM-yyyy", "d MMM yyyy"
-    };
-
     record CheckRow(LocalDate date, String checkNumber, BigDecimal amount) {}
 
     private UncategorizedCheckReport() {}
 
     public static void main(String[] args) {
-        Path input = args.length > 0 ? Path.of(args[0]) : DEFAULT_INPUT;
-        Path output = args.length > 1 ? Path.of(args[1]) : DEFAULT_OUTPUT;
+        Path input = args.length > 0 ? Path.of(args[0]) : defaultInput;
+        Path output = args.length > 1 ? Path.of(args[1]) : defaultOutput;
         List<CheckRow> checks = loadChecks(input);
         writeReport(output, checks);
         System.out.printf("Wrote %d uncategorized checks to %s%n",
@@ -76,7 +65,7 @@ public final class UncategorizedCheckReport {
             if (!(category.isEmpty() || category.equalsIgnoreCase("Uncategorized")
                     || category.equalsIgnoreCase("(Uncategorized)"))) continue;
 
-            Matcher matcher = CHECK_PAYEE.matcher(fields.get(payeeCol).strip());
+            Matcher matcher = checkPayee.matcher(fields.get(payeeCol).strip());
             if (!matcher.matches()) continue;
             BigDecimal amount = parseAmount(fields.get(amountCol));
             if (amount.signum() >= 0) continue;
@@ -121,7 +110,7 @@ public final class UncategorizedCheckReport {
         } catch (RuntimeException ignored) {
             // Try the known Simplifi and common US date formats below.
         }
-        for (String pattern : DATE_PATTERNS) {
+        for (String pattern : datePatterns) {
             try {
                 return LocalDate.parse(text,
                         DateTimeFormatter.ofPattern(pattern, Locale.US));
@@ -168,4 +157,17 @@ public final class UncategorizedCheckReport {
         fields.add(current.toString());
         return fields;
     }
+
+    // ---- fields -------------------------------------------------------
+
+    private static final Path defaultInput = Path.of("all.csv");
+    private static final Path defaultOutput =
+            Path.of("build", "reports", "uncategorized-checks.csv");
+    private static final Pattern checkPayee =
+            Pattern.compile("(?i)^check\\s+(\\d+)\\s*$");
+    private static final String[] datePatterns = {
+        "MMM d, yyyy", "MMMM d, yyyy", "M/d/yyyy", "MM/dd/yyyy",
+        "M/d/yy", "MM/dd/yy", "yyyy/M/d", "M-d-yyyy", "MM-dd-yyyy",
+        "d-MMM-yyyy", "d MMM yyyy"
+    };
 }

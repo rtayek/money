@@ -28,17 +28,6 @@ import java.util.regex.Pattern;
  */
 public final class CategorizationAudit {
 
-    private static final String FORMAT_A_DATE = "Date";
-    private static final String FORMAT_A_PAYEE = "Payee";
-    private static final String FORMAT_A_AMOUNT = "Amount";
-
-    private static final String FORMAT_B_DATE = "Date";
-    private static final String FORMAT_B_TEXT = "OriginalDescription";
-    private static final String FORMAT_B_AMOUNT = "Amount";
-
-    private static final Pattern PROCESSOR_PREFIX = Pattern.compile("^[A-Z]{2,5}\\*+\\s*");
-    private static final Pattern LEADING_TOKEN = Pattern.compile("^([A-Z0-9&'\\-]+)");
-
     public static void main(String[] args) {
         Path quicken = Path.of(args.length > 0 ? args[0] : "all.csv");
         Path plaid = Path.of(args.length > 1 ? args[1] : "tmp/plaid/combined.csv");
@@ -52,9 +41,9 @@ public final class CategorizationAudit {
 
     public void run() {
         List<Entry> quicken = load(quickenCsv,
-                FORMAT_A_DATE, FORMAT_A_PAYEE, FORMAT_A_AMOUNT, true);
+                formatADate, formatAPayee, formatAAmount, true);
         List<Entry> plaid = load(plaidCsv,
-                FORMAT_B_DATE, FORMAT_B_TEXT, FORMAT_B_AMOUNT, false);
+                formatBDate, formatBText, formatBAmount, false);
         Audit audit = match(quicken, plaid);
         printAudit(audit, quicken.size(), plaid.size());
     }
@@ -62,8 +51,8 @@ public final class CategorizationAudit {
     static String cleanPayee(String raw) {
         if (raw == null) return "";
         String upper = raw.strip().toUpperCase(Locale.ROOT).replaceAll("\\s+", " ");
-        String noPrefix = PROCESSOR_PREFIX.matcher(upper).replaceFirst("");
-        Matcher m = LEADING_TOKEN.matcher(noPrefix);
+        String noPrefix = processorPrefix.matcher(upper).replaceFirst("");
+        Matcher m = leadingToken.matcher(noPrefix);
         return m.find() ? m.group(1) : noPrefix;
     }
 
@@ -104,12 +93,12 @@ public final class CategorizationAudit {
     private static boolean candidate(Entry quicken, Entry plaid) {
         if (quicken.date() == null || plaid.date() == null) return false;
         if (quicken.cleaned().isEmpty() || !quicken.cleaned().equals(plaid.cleaned())) return false;
-        if (Math.abs(Math.abs(quicken.amount()) - Math.abs(plaid.amount())) > AMOUNT_TOLERANCE) {
+        if (Math.abs(Math.abs(quicken.amount()) - Math.abs(plaid.amount())) > amountTolerance) {
             return false;
         }
         if (!sameTransactionDirection(quicken.amount(), plaid.amount())) return false;
         return Math.abs(ChronoUnit.DAYS.between(quicken.date(), plaid.date()))
-                <= DATE_TOLERANCE_DAYS;
+                <= dateToleranceDays;
     }
 
     /**
@@ -283,8 +272,21 @@ public final class CategorizationAudit {
     record Match(Entry quicken, Entry plaid, boolean ambiguous) {}
     record Audit(List<Match> matches, List<Entry> unmatchedPlaid) {}
 
-    private static final int DATE_TOLERANCE_DAYS = 2;
-    private static final double AMOUNT_TOLERANCE = 0.005;
+    // ---- fields -------------------------------------------------------
+
+    private static final String formatADate = "Date";
+    private static final String formatAPayee = "Payee";
+    private static final String formatAAmount = "Amount";
+
+    private static final String formatBDate = "Date";
+    private static final String formatBText = "OriginalDescription";
+    private static final String formatBAmount = "Amount";
+
+    private static final Pattern processorPrefix = Pattern.compile("^[A-Z]{2,5}\\*+\\s*");
+    private static final Pattern leadingToken = Pattern.compile("^([A-Z0-9&'\\-]+)");
+
+    private static final int dateToleranceDays = 2;
+    private static final double amountTolerance = 0.005;
 
     private final Path quickenCsv;
     private final Path plaidCsv;
