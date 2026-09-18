@@ -42,7 +42,7 @@ public final class CategorizationAudit {
 
     public static void main(String[] args) {
         Path quicken = Path.of(args.length > 0 ? args[0] : "all.csv");
-        Path plaid = Path.of(args.length > 1 ? args[1] : "plaid-transactions.csv");
+        Path plaid = Path.of(args.length > 1 ? args[1] : "tmp/plaid/combined.csv");
         new CategorizationAudit(quicken, plaid).run();
     }
 
