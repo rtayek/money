@@ -21,8 +21,9 @@ import java.util.regex.Pattern;
  * Format A (Quicken all.csv): Date,Account,Check #,Reviewed,Payee,Category,Exclusion,Amount
  * Format B (Plaid/AmEx):      Date,Name,MerchantName,OriginalDescription,Category,Amount
  *
- * Run: java -p out -m money/money.CategorizationAudit [all.csv] [plaid-transactions.csv]
- * The run is passive: it reads the files and prints; it writes nothing.
+ * Run: java -p out -m money/money.CategorizationAudit [quickenCsv] [plaidCsv]
+ * (defaults are in main). The run is passive: it reads the files and prints;
+ * it writes nothing.
  */
 public final class CategorizationAudit {
 
