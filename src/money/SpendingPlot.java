@@ -160,20 +160,30 @@ public final class SpendingPlot {
 
         Map<String, String> mirrorOf = detectMirrors(byAccount);
 
-        Map<String, Map<String, Integer>> available = new LinkedHashMap<>();
+        Map<String, Map<String, List<Row>>> available = new LinkedHashMap<>();
         for (String partner : new HashSet<>(mirrorOf.values())) {
-            available.put(partner, keyCounts(byAccount.get(partner)));
+            available.put(partner, rowsByKey(byAccount.get(partner)));
         }
 
         List<Transaction> out = new ArrayList<>(rows.size());
         int dropped = 0;
+        int categoryConflicts = 0;
         for (Row r : rows) {
             String partner = mirrorOf.get(r.account());
             if (partner != null) {
-                Map<String, Integer> avail = available.get(partner);
-                Integer c = avail.get(r.key());
-                if (c != null && c > 0) {           // has an unused twin in the kept account
-                    avail.put(r.key(), c - 1);
+                Map<String, List<Row>> avail = available.get(partner);
+                List<Row> twins = avail.get(r.key());
+                if (twins != null && !twins.isEmpty()) {
+                    Row kept = twins.remove(twins.size() - 1);
+                    if (!r.txn().category().equalsIgnoreCase(kept.txn().category())) {
+                        categoryConflicts++;
+                        System.out.printf(Locale.US,
+                                "Warning: mirrored copies have different categories: "
+                                + "%s | %s | %,.2f | dropping %s [%s], keeping %s [%s]%n",
+                                r.txn().date(), r.txn().payee(), r.txn().amount(),
+                                r.account(), r.txn().category(),
+                                kept.account(), kept.txn().category());
+                    }
                     dropped++;
                     continue;
                 }
@@ -183,6 +193,11 @@ public final class SpendingPlot {
         if (dropped > 0) {
             System.out.printf(Locale.US,
                     "Ignored %d duplicate rows from mirrored account(s): %s%n", dropped, mirrorOf);
+        }
+        if (categoryConflicts > 0) {
+            System.out.printf(Locale.US,
+                    "Found %d mirrored category conflict(s); review the warnings above.%n",
+                    categoryConflicts);
         }
         return out;
     }
@@ -215,6 +230,12 @@ public final class SpendingPlot {
             }
         }
         return mirrorOf;
+    }
+
+    private static Map<String, List<Row>> rowsByKey(List<Row> rows) {
+        Map<String, List<Row>> m = new LinkedHashMap<>();
+        for (Row r : rows) m.computeIfAbsent(r.key(), _ -> new ArrayList<>()).add(r);
+        return m;
     }
 
     private static Map<String, Integer> keyCounts(List<Row> rows) {
