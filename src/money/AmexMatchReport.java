@@ -35,6 +35,7 @@ public final class AmexMatchReport {
 
     record SimplifiRow(LocalDate date, String account, String payee, String category, double amount) {}
     record PlaidRow(LocalDate date, String name, String merchantName, String originalDescription, double amount) {}
+    record MatchResult(PlaidRow row, boolean ambiguous) {}
 
     public static void main(String[] args) {
         Path simplifiCsv = Path.of(args.length > 0 ? args[0] : "all.csv");
@@ -45,19 +46,25 @@ public final class AmexMatchReport {
         List<PlaidRow> plaidRows = loadPlaidRows(plaidCsv);
 
         List<String> lines = new ArrayList<>();
-        lines.add("Date,Payee,Category,Amount,Matched,PlaidName,PlaidMerchant,PlaidOriginalDescription,LooksMoreSpecific");
+        lines.add("Date,Payee,Category,Amount,Matched,MatchStatus,PlaidName,PlaidMerchant,PlaidOriginalDescription,LooksMoreSpecific");
 
+        boolean[] usedPlaid = new boolean[plaidRows.size()];
         int matched = 0;
+        int ambiguous = 0;
         int moreSpecific = 0;
         for (SimplifiRow s : amexRows) {
-            PlaidRow best = findBestMatch(s, plaidRows);
+            MatchResult result = findBestMatch(s, plaidRows, usedPlaid);
+            PlaidRow best = result == null ? null : result.row();
             boolean isMatch = best != null;
+            boolean isAmbiguous = isMatch && result.ambiguous();
             if (isMatch) matched++;
+            if (isAmbiguous) ambiguous++;
 
             String plaidName = isMatch ? best.name() : "";
             String plaidMerchant = isMatch ? best.merchantName() : "";
             String plaidOriginal = isMatch ? best.originalDescription() : "";
-            boolean specific = isMatch && looksMoreSpecific(s.payee(), plaidOriginal, plaidName);
+            boolean specific = isMatch && looksMoreSpecific(
+                    s.payee(), plaidOriginal, plaidMerchant, plaidName);
             if (specific) moreSpecific++;
 
             lines.add(String.join(",",
@@ -66,6 +73,7 @@ public final class AmexMatchReport {
                     csv(s.category()),
                     csv(String.format(Locale.US, "%.2f", s.amount())),
                     csv(isMatch ? "yes" : "no"),
+                    csv(isMatch ? (isAmbiguous ? "ambiguous" : "unique") : "unmatched"),
                     csv(plaidName),
                     csv(plaidMerchant),
                     csv(plaidOriginal),
@@ -74,36 +82,78 @@ public final class AmexMatchReport {
 
         writeReport(output, lines);
         System.out.printf(Locale.US,
-                "Simplifi Amex rows: %d, matched to Plaid: %d (%.0f%%), with a more specific description: %d%n",
+                "Simplifi Amex rows: %d, matched to Plaid: %d (%.0f%%), ambiguous: %d, with a more specific description: %d%n",
                 amexRows.size(), matched,
                 amexRows.isEmpty() ? 0.0 : 100.0 * matched / amexRows.size(),
-                moreSpecific);
+                ambiguous, moreSpecific);
         System.out.println("Wrote " + output.toAbsolutePath());
     }
 
-    /** Picks the closest-dated Plaid row within tolerance whose amount also matches; null if none does. */
-    private static PlaidRow findBestMatch(SimplifiRow s, List<PlaidRow> plaidRows) {
-        PlaidRow best = null;
-        long bestDiff = Long.MAX_VALUE;
-        for (PlaidRow p : plaidRows) {
+    /**
+     * Picks one unused Plaid row. Simplifi records spending as negative while
+     * Plaid records it as positive, so matching transactions have opposite
+     * signs. Merchant-related candidates outrank unrelated candidates, then
+     * the closest date wins. Equal best candidates are marked ambiguous.
+     */
+    private static MatchResult findBestMatch(
+            SimplifiRow s, List<PlaidRow> plaidRows, boolean[] usedPlaid) {
+        int bestIndex = -1;
+        int bestTextRank = Integer.MAX_VALUE;
+        long bestDays = Long.MAX_VALUE;
+        int tiedBest = 0;
+
+        for (int i = 0; i < plaidRows.size(); i++) {
+            if (usedPlaid[i]) continue;
+            PlaidRow p = plaidRows.get(i);
             if (Math.abs(Math.abs(p.amount()) - Math.abs(s.amount())) > AMOUNT_TOLERANCE) continue;
+            if (!sameTransactionDirection(s.amount(), p.amount())) continue;
+
             long days = Math.abs(java.time.temporal.ChronoUnit.DAYS.between(s.date(), p.date()));
             if (days > DATE_TOLERANCE_DAYS) continue;
-            if (days < bestDiff) {
-                bestDiff = days;
-                best = p;
+            int textRank = merchantRelated(s.payee(), p) ? 0 : 1;
+
+            if (textRank < bestTextRank || (textRank == bestTextRank && days < bestDays)) {
+                bestIndex = i;
+                bestTextRank = textRank;
+                bestDays = days;
+                tiedBest = 1;
+            } else if (textRank == bestTextRank && days == bestDays) {
+                tiedBest++;
             }
         }
-        return best;
+
+        if (bestIndex < 0) return null;
+        usedPlaid[bestIndex] = true;
+        return new MatchResult(plaidRows.get(bestIndex), tiedBest > 1);
     }
 
-    /** True if Plaid's text says something Simplifi's payee doesn't already say. */
-    private static boolean looksMoreSpecific(String payee, String originalDescription, String plaidName) {
-        String richer = !originalDescription.isBlank() ? originalDescription : plaidName;
-        if (richer.isBlank()) return false;
+    private static boolean sameTransactionDirection(double simplifiAmount, double plaidAmount) {
+        if (simplifiAmount == 0 || plaidAmount == 0) {
+            return simplifiAmount == 0 && plaidAmount == 0;
+        }
+        return Math.signum(simplifiAmount) == -Math.signum(plaidAmount);
+    }
+
+    private static boolean merchantRelated(String payee, PlaidRow plaid) {
+        String token = CategorizationAudit.cleanPayee(payee);
+        if (token.isEmpty()) return false;
+        return token.equals(CategorizationAudit.cleanPayee(plaid.name()))
+                || token.equals(CategorizationAudit.cleanPayee(plaid.merchantName()))
+                || token.equals(CategorizationAudit.cleanPayee(plaid.originalDescription()));
+    }
+
+    /** True if any Plaid text says something Simplifi's payee doesn't already say. */
+    private static boolean looksMoreSpecific(
+            String payee, String originalDescription, String merchantName, String plaidName) {
         String payeeNorm = payee.strip().toLowerCase(Locale.ROOT);
-        String richerNorm = richer.strip().toLowerCase(Locale.ROOT);
-        return !richerNorm.equals(payeeNorm) && richerNorm.length() > payeeNorm.length();
+        for (String richer : List.of(originalDescription, merchantName, plaidName)) {
+            if (richer.isBlank()) continue;
+            String richerNorm = richer.strip().toLowerCase(Locale.ROOT);
+            if (!richerNorm.equals(payeeNorm) && richerNorm.length() > payeeNorm.length()) {
+                return true;
+            }
+        }
+        return false;
     }
 
     // ---- Simplifi CSV loading ----------------------------------------------
