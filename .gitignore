@@ -88,6 +88,7 @@ testfile.txt
 /plaid-transactions.csv
 /amazon-recurring-charges.md
 /payee-match-misses.md
+/card-registry.md
 
 # LibreOffice/OpenOffice lock files
 .~lock.*#
