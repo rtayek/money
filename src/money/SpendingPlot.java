@@ -491,7 +491,7 @@ public final class SpendingPlot {
 
     private static void showCharts(String title, List<Transaction> transactions,
                                    List<CategoryTotal> totals) {
-        JFrame frame = new JFrame("Spending — " + title);
+        JFrame frame = new JFrame("Spending - " + title);
         frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
 
         // Categories the user right-clicks away are collected here (across all
