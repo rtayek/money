@@ -26,6 +26,9 @@ not in this repo's build.
 - Decide, for real: delete `UncategorizedCheckReport.java`, or keep it. It's
   been re-added three times after being asked to delete it twice.
 - Pull `sameTransactionDirection` out of both matchers into one shared spot.
+- Pursue GitHub Support to purge the dangling `copy-of-action-checklist.md`
+  commit (`bab6815`): the `money` repo is PUBLIC and that unreachable commit
+  is still fetchable by SHA. Confirm no forks first (a fork keeps it alive).
 
 ## Decisions
 
@@ -35,9 +38,7 @@ not in this repo's build.
 
 ## Open questions
 
-- Is the `money` GitHub repo public or private? Determines whether the
-  dangling `copy-of-action-checklist.md` commit residue is worth pursuing
-  with GitHub Support.
+- (none currently open)
 
 ## Deferred
 
