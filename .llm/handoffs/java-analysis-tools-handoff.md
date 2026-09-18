@@ -22,9 +22,10 @@ the goal now is durable, repeatable Java that Ray can run and maintain.
   cross-account mirror-dedupe (an account counts as a mirror when >= 90% of its
   rows have an exact date+payee+amount twin in one other account; only
   cross-account duplicates are dropped).
-- `src/money/CategorizationAudit.java` - dual-format matcher (Quicken all.csv vs
-  Plaid feed), payee cleaning, rule key `cleanedPayee + "_" + abs(amount)`,
-  pass/fail scorecard.
+- `src/money/CategorizationAudit.java` - dual-format matcher (Simplifi all.csv
+  vs Plaid feed). Matching is one-to-one and requires merchant token, amount,
+  opposite source-specific signs, and dates within two days; tied candidates
+  are reported as ambiguous rather than clean passes.
 - `src/money/AmexMatchReport.java` - matches Simplifi Amex rows to a Plaid feed.
 - `tools/plaid/PullTransactions.java` - archived copy; builds/runs in the Plaid
   quickstart project. Emits `Date,AccountId,Account,Name,MerchantName,`
