@@ -27,11 +27,14 @@ not in this repo's build.
   been re-added three times after being asked to delete it twice.
 - Pull `sameTransactionDirection` out of both matchers into one shared spot.
 
+## Decisions
+
+- AI/software subscriptions (ChatGPT, OpenAI, OpenRouter, Quicken,
+  Claude/Anthropic, GitHub, Coursera, AI Sensei) categorize to
+  `Utilities:Internet & Cable`. Ray confirmed this on 2026-09-16.
+
 ## Open questions
 
-- Where should AI subscriptions (ChatGPT, OpenRouter, Quicken,
-  Claude/Anthropic) actually be categorized? "Utilities:Internet & Cable"
-  was applied without Ray confirming it -- still unsettled.
 - Is the `money` GitHub repo public or private? Determines whether the
   dangling `copy-of-action-checklist.md` commit residue is worth pursuing
   with GitHub Support.
