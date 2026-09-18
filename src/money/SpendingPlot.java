@@ -111,12 +111,13 @@ public final class SpendingPlot {
         int amtCol = indexOfHeader(header, "Amount");
         int exclCol = indexOfHeader(header, "Exclusion");
         int payeeCol = indexOfHeader(header, "Payee");
+        int acctCol = indexOfHeader(header, "Account");
         if (catCol < 0 || amtCol < 0) {
             throw new IllegalStateException(
                     "CSV must have 'Category' and 'Amount' columns; found: " + header);
         }
 
-        List<Transaction> txns = new ArrayList<>();
+        List<Row> rows = new ArrayList<>();
         for (int i = 1; i < lines.size(); i++) {
             String raw = lines.get(i);
             if (raw.isBlank()) continue;
@@ -134,10 +135,110 @@ public final class SpendingPlot {
                     ? parseDate(fields.get(dateCol)) : null;
             String payee = (payeeCol >= 0 && payeeCol < fields.size())
                     ? fields.get(payeeCol).strip() : "";
+            String account = (acctCol >= 0 && acctCol < fields.size())
+                    ? fields.get(acctCol).strip() : "";
 
-            txns.add(new Transaction(date, category, payee, amount));
+            rows.add(new Row(account, new Transaction(date, category, payee, amount)));
         }
-        return txns;
+        return withoutMirroredDuplicates(rows);
+    }
+
+    /**
+     * Drops exact duplicates created when one real account is linked into
+     * Simplifi twice (e.g. "Traditional Gold Card" and "American Express
+     * Traditional Gold" carry the same charges). An account is treated as a
+     * mirror when at least {@link #MIRROR_FRACTION} of its rows have an exact
+     * (date, payee, amount) twin in one other account; the smaller account's
+     * mirrored rows are then removed. Duplicates are only collapsed across
+     * different accounts, so genuine same-day repeats within one account are
+     * kept, and unrelated accounts that share the odd identical charge are
+     * left alone.
+     */
+    static List<Transaction> withoutMirroredDuplicates(List<Row> rows) {
+        Map<String, List<Row>> byAccount = new LinkedHashMap<>();
+        for (Row r : rows) byAccount.computeIfAbsent(r.account(), k -> new ArrayList<>()).add(r);
+
+        Map<String, String> mirrorOf = detectMirrors(byAccount);
+
+        Map<String, Map<String, Integer>> available = new LinkedHashMap<>();
+        for (String partner : new HashSet<>(mirrorOf.values())) {
+            available.put(partner, keyCounts(byAccount.get(partner)));
+        }
+
+        List<Transaction> out = new ArrayList<>(rows.size());
+        int dropped = 0;
+        for (Row r : rows) {
+            String partner = mirrorOf.get(r.account());
+            if (partner != null) {
+                Map<String, Integer> avail = available.get(partner);
+                Integer c = avail.get(r.key());
+                if (c != null && c > 0) {           // has an unused twin in the kept account
+                    avail.put(r.key(), c - 1);
+                    dropped++;
+                    continue;
+                }
+            }
+            out.add(r.txn());
+        }
+        if (dropped > 0) {
+            System.out.printf(Locale.US,
+                    "Ignored %d duplicate rows from mirrored account(s): %s%n", dropped, mirrorOf);
+        }
+        return out;
+    }
+
+    /** Maps each mirror account to the account whose copy is kept. */
+    private static Map<String, String> detectMirrors(Map<String, List<Row>> byAccount) {
+        Map<String, String> mirrorOf = new LinkedHashMap<>();
+        if (byAccount.size() < 2) return mirrorOf;
+
+        Map<String, Map<String, Integer>> counts = new LinkedHashMap<>();
+        for (Map.Entry<String, List<Row>> e : byAccount.entrySet()) {
+            counts.put(e.getKey(), keyCounts(e.getValue()));
+        }
+        for (String a : byAccount.keySet()) {
+            int size = byAccount.get(a).size();
+            if (size < MIRROR_MIN_ROWS) continue;
+            String best = null;
+            int bestOverlap = 0;
+            for (String b : byAccount.keySet()) {
+                if (b.equals(a)) continue;
+                int ov = overlap(counts.get(a), counts.get(b));
+                if (ov > bestOverlap) { bestOverlap = ov; best = b; }
+            }
+            if (best != null && bestOverlap >= MIRROR_FRACTION * size) {
+                int bSize = byAccount.get(best).size();
+                // strip the smaller account (ties: the later-sorting name), keep the other
+                if (size < bSize || (size == bSize && a.compareTo(best) > 0)) {
+                    mirrorOf.put(a, best);
+                }
+            }
+        }
+        return mirrorOf;
+    }
+
+    private static Map<String, Integer> keyCounts(List<Row> rows) {
+        Map<String, Integer> m = new LinkedHashMap<>();
+        for (Row r : rows) m.merge(r.key(), 1, Integer::sum);
+        return m;
+    }
+
+    /** Count of shared keys between two multisets, respecting multiplicity. */
+    private static int overlap(Map<String, Integer> a, Map<String, Integer> b) {
+        int total = 0;
+        for (Map.Entry<String, Integer> e : a.entrySet()) {
+            Integer bc = b.get(e.getKey());
+            if (bc != null) total += Math.min(e.getValue(), bc);
+        }
+        return total;
+    }
+
+    /** A parsed row plus its source account, used only for duplicate detection. */
+    record Row(String account, Transaction txn) {
+        String key() {
+            return txn.date() + "|" + txn.payee() + "|"
+                    + String.format(Locale.US, "%.2f", txn.amount());
+        }
     }
 
     /**
@@ -1021,6 +1122,12 @@ public final class SpendingPlot {
     }
 
     // ---- fields -----------------------------------------------------------
+
+    /** Min rows an account needs before it can be judged a duplicate link. */
+    private static final int MIRROR_MIN_ROWS = 20;
+
+    /** Fraction of an account's rows that must be exact twins of one other account to call it a mirror. */
+    private static final double MIRROR_FRACTION = 0.90;
 
     /** Max distinct category lines drawn on the time chart; the rest = "Other". */
     private static final int MAX_SERIES = 100;
