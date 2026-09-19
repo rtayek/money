@@ -70,6 +70,10 @@ public final class SpendingPlot {
     /** One spending category and its total (a positive dollar amount). */
     record CategoryTotal(String category, double total) {}
 
+    /** Monthly average and variability for one spending category. */
+    record CategoryDeviation(String category, double average,
+            double standardDeviation, double percentage) {}
+
     /** A single spending transaction (amount is a positive outflow). */
     record Transaction(LocalDate date, String category, String payee, double amount) {}
 
@@ -388,11 +392,13 @@ public final class SpendingPlot {
     }
 
     /**
-     * Population standard deviation of each category's monthly spending, taken
-     * over every month present in the data (months with no spending count as 0).
-     * Returned as {@link CategoryTotal}s (total = std dev), sorted largest first.
+     * Monthly average, population standard deviation, and relative standard
+     * deviation for each category. Every month present in the data is included;
+     * months with no spending in a category count as 0. Results are sorted by
+     * dollar standard deviation, largest first.
      */
-    static List<CategoryTotal> categoryMonthlyStdDevs(List<Transaction> transactions) {
+    static List<CategoryDeviation> categoryMonthlyDeviations(
+            List<Transaction> transactions) {
         TreeSet<YearMonth> monthSet = new TreeSet<>();
         for (Transaction t : transactions)
             if (t.date() != null) monthSet.add(YearMonth.from(t.date()));
@@ -410,16 +416,27 @@ public final class SpendingPlot {
                  [idx.get(YearMonth.from(t.date()))] += t.amount();
         }
 
-        List<CategoryTotal> out = new ArrayList<>();
+        List<CategoryDeviation> out = new ArrayList<>();
         byCat.forEach((cat, a) -> {
             double mean = 0;
             for (double v : a) mean += v;
             mean /= n;
             double var = 0;
             for (double v : a) var += (v - mean) * (v - mean);
-            out.add(new CategoryTotal(cat, Math.sqrt(var / n)));
+            double standardDeviation = Math.sqrt(var / n);
+            double percentage = mean == 0 ? 0 : standardDeviation / mean;
+            out.add(new CategoryDeviation(cat, mean, standardDeviation, percentage));
         });
-        out.sort(Comparator.comparingDouble(CategoryTotal::total).reversed());
+        out.sort(Comparator.comparingDouble(
+                CategoryDeviation::standardDeviation).reversed());
+        return out;
+    }
+
+    /** Retained for callers that only need the dollar standard deviation. */
+    static List<CategoryTotal> categoryMonthlyStdDevs(List<Transaction> transactions) {
+        List<CategoryTotal> out = new ArrayList<>();
+        for (CategoryDeviation d : categoryMonthlyDeviations(transactions))
+            out.add(new CategoryTotal(d.category(), d.standardDeviation()));
         return out;
     }
 
@@ -524,14 +541,17 @@ public final class SpendingPlot {
         tabs.addTab("By Category", new JScrollPane(new BarChartPanel(totals)));
         tabs.addTab("Over Time", track(new TimeSeriesPanel(transactions, totals),
                 removed, linePanels));
-        tabs.addTab("Std Dev", new StdDevPanel(categoryMonthlyStdDevs(transactions)));
-        // Two deviation panes: after dropping excluded prefixes and anything
-        // below the noise floor, split the survivors at their median std dev --
-        // top half in "High", bottom half in "Low".
+        List<CategoryDeviation> deviations = categoryMonthlyDeviations(transactions);
+        tabs.addTab("Std Dev", new StdDevPanel(deviations));
+        // Two deviation panes: after dropping excluded prefixes and categories
+        // below either noise floor, split the survivors at their median dollar
+        // std dev -- top half in "High", bottom half in "Low".
         List<String> ranked = new ArrayList<>();          // sorted high std dev -> low
-        for (CategoryTotal sd : categoryMonthlyStdDevs(transactions))
-            if (sd.total() >= deviationMinStddev && !isDeviationExcluded(sd.category()))
-                ranked.add(sd.category());
+        for (CategoryDeviation d : deviations)
+            if (d.standardDeviation() >= deviationMinStddev
+                    && d.percentage() >= deviationMinPercentage
+                    && !isDeviationExcluded(d.category()))
+                ranked.add(d.category());
         int mid = (ranked.size() + 1) / 2;                // high half keeps the odd one
         tabs.addTab("High Deviation", track(deviationPanel(transactions,
                 new HashSet<>(ranked.subList(0, mid))), removed, linePanels));
@@ -1075,20 +1095,27 @@ public final class SpendingPlot {
         private Set<String> removedSink;                 // collects removed categories, if set
     }
 
-    /** A plain table of each category and its monthly-spending standard deviation. */
+    /** Monthly average and variability for every spending category. */
     @SuppressWarnings("serial")
     static final class StdDevPanel extends JPanel {
-        StdDevPanel(List<CategoryTotal> stdDevs) {
+        StdDevPanel(List<CategoryDeviation> deviations) {
             super(new BorderLayout());
             NumberFormat money = NumberFormat.getCurrencyInstance(Locale.US);
+            NumberFormat percent = NumberFormat.getPercentInstance(Locale.US);
+            percent.setMinimumFractionDigits(1);
+            percent.setMaximumFractionDigits(1);
 
-            Object[][] rows = new Object[stdDevs.size()][2];
-            for (int i = 0; i < stdDevs.size(); i++) {
-                rows[i][0] = stdDevs.get(i).category();
-                rows[i][1] = money.format(stdDevs.get(i).total());
+            Object[][] rows = new Object[deviations.size()][4];
+            for (int i = 0; i < deviations.size(); i++) {
+                CategoryDeviation d = deviations.get(i);
+                rows[i][0] = d.category();
+                rows[i][1] = money.format(d.average());
+                rows[i][2] = money.format(d.standardDeviation());
+                rows[i][3] = percent.format(d.percentage());
             }
             DefaultTableModel model =
-                    new DefaultTableModel(rows, new Object[] {"Category", "Std Dev"}) {
+                    new DefaultTableModel(rows,
+                            new Object[] {"Category", "Monthly Avg", "Std Dev", "% of Avg"}) {
                         @Override public boolean isCellEditable(int r, int c) { return false; }
                     };
             JTable table = new JTable(model);
@@ -1096,14 +1123,17 @@ public final class SpendingPlot {
             table.setRowHeight(28);
             table.getTableHeader().setReorderingAllowed(false);
             table.getTableHeader().setFont(new Font(Font.SANS_SERIF, Font.BOLD, 17));
-            table.getColumnModel().getColumn(0).setPreferredWidth(260);
+            table.getColumnModel().getColumn(0).setPreferredWidth(250);
             DefaultTableCellRenderer right = new DefaultTableCellRenderer();
             right.setHorizontalAlignment(SwingConstants.RIGHT);
-            table.getColumnModel().getColumn(1).setCellRenderer(right);
-            table.getColumnModel().getColumn(1).setPreferredWidth(100);
+            for (int column = 1; column < 4; column++)
+                table.getColumnModel().getColumn(column).setCellRenderer(right);
+            table.getColumnModel().getColumn(1).setPreferredWidth(115);
+            table.getColumnModel().getColumn(2).setPreferredWidth(100);
+            table.getColumnModel().getColumn(3).setPreferredWidth(90);
 
             JScrollPane scroll = new JScrollPane(table);
-            scroll.setPreferredSize(new Dimension(380, 560));
+            scroll.setPreferredSize(new Dimension(570, 560));
             JPanel center = new JPanel();       // keep the table narrow, don't stretch it
             center.add(scroll);
             add(center, BorderLayout.CENTER);
@@ -1125,6 +1155,9 @@ public final class SpendingPlot {
         System.out.println("CSV rows marked Exclusion=yes are also excluded.");
         System.out.println("Excluded only from deviation charts: "
                 + String.join(", ", new TreeSet<>(deviationExcluded)));
+        System.out.printf(Locale.US,
+                "Deviation charts require at least $%,.0f std dev and %.0f%% of average.%n",
+                deviationMinStddev, deviationMinPercentage * 100);
 
         // Load once, unfiltered; each report below filters it for its own purpose.
         List<Transaction> all = loadAllTransactions(csv);
@@ -1175,6 +1208,9 @@ public final class SpendingPlot {
      * their median into the High and Low deviation panes.
      */
     private static final double deviationMinStddev = 50;
+
+    /** Minimum standard deviation as a fraction of average monthly spending. */
+    private static final double deviationMinPercentage = 0.10;
 
     /**
      * Deviation pane only: category name prefixes always dropped regardless of
