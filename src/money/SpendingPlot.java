@@ -1120,6 +1120,12 @@ public final class SpendingPlot {
             return;
         }
 
+        System.out.println("Excluded from all spending charts: "
+                + String.join(", ", new TreeSet<>(excludedCategories)));
+        System.out.println("CSV rows marked Exclusion=yes are also excluded.");
+        System.out.println("Excluded only from deviation charts: "
+                + String.join(", ", new TreeSet<>(deviationExcluded)));
+
         // Load once, unfiltered; each report below filters it for its own purpose.
         List<Transaction> all = loadAllTransactions(csv);
         if (all.isEmpty()) {
