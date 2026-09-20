@@ -77,11 +77,21 @@ public final class SpendingPlot {
     /** A single spending transaction (amount is a positive outflow). */
     record Transaction(LocalDate date, String category, String payee, double amount) {}
 
-    /** True if a category should be excluded from the deviation pane. */
-    private static boolean isDeviationExcluded(String category) {
-        for (String prefix : deviationExcluded)
+    /** True if a category matches a configured name or one of its subcategories. */
+    private static boolean matchesCategory(String category, Set<String> configured) {
+        for (String prefix : configured)
             if (category.equals(prefix) || category.startsWith(prefix + ":")) return true;
         return false;
+    }
+
+    /** True if a category should be excluded from the deviation panes. */
+    private static boolean isDeviationExcluded(String category) {
+        return matchesCategory(category, deviationExcluded);
+    }
+
+    /** True for predictable yearly or otherwise occasional spending. */
+    private static boolean isAnnualCategory(String category) {
+        return matchesCategory(category, annualCategories);
     }
 
     /** Uses ./all.csv if present, otherwise opens a file chooser. */
@@ -541,7 +551,9 @@ public final class SpendingPlot {
         tabs.addTab("By Category", new JScrollPane(new BarChartPanel(totals)));
         tabs.addTab("Over Time", track(new TimeSeriesPanel(transactions, totals),
                 removed, linePanels));
-        List<CategoryDeviation> deviations = categoryMonthlyDeviations(transactions);
+        List<CategoryDeviation> deviations =
+                new ArrayList<>(categoryMonthlyDeviations(transactions));
+        deviations.removeIf(d -> isAnnualCategory(d.category()));
         tabs.addTab("Std Dev", new StdDevPanel(deviations));
         // Two deviation panes: after dropping excluded prefixes and categories
         // below either noise floor, split the survivors at their median dollar
@@ -558,15 +570,16 @@ public final class SpendingPlot {
         tabs.addTab("Low Deviation", track(deviationPanel(transactions,
                 new HashSet<>(ranked.subList(mid, ranked.size()))), removed, linePanels));
 
-        // Fifth pane: total monthly spending as one series, plotted as its
-        // dollar deviation from the overall monthly mean.
+        // Fifth pane: regular monthly spending as one series, excluding the
+        // configured annual/occasional categories before finding its mean.
         List<Transaction> totalTxns = new ArrayList<>();
         double grand = 0;
         for (Transaction t : transactions) {
+            if (isAnnualCategory(t.category())) continue;
             totalTxns.add(new Transaction(t.date(), "Total", t.payee(), t.amount()));
             grand += t.amount();
         }
-        tabs.addTab("Total Deviation", track(new TimeSeriesPanel(totalTxns,
+        tabs.addTab("Regular Total Deviation", track(new TimeSeriesPanel(totalTxns,
                 List.of(new CategoryTotal("Total", grand)), true), removed, linePanels));
 
         // Toolbar with a button to re-hide the categories removed last time.
@@ -1153,7 +1166,9 @@ public final class SpendingPlot {
         System.out.println("Excluded from all spending charts: "
                 + String.join(", ", new TreeSet<>(excludedCategories)));
         System.out.println("CSV rows marked Exclusion=yes are also excluded.");
-        System.out.println("Excluded only from deviation charts: "
+        System.out.println("Annual/occasional categories excluded from deviations: "
+                + String.join(", ", new TreeSet<>(annualCategories)));
+        System.out.println("Other categories excluded only from deviation charts: "
                 + String.join(", ", new TreeSet<>(deviationExcluded)));
         System.out.printf(Locale.US,
                 "Deviation charts require at least $%,.0f std dev and %.0f%% of average.%n",
@@ -1213,12 +1228,20 @@ public final class SpendingPlot {
     private static final double deviationMinPercentage = 0.10;
 
     /**
-     * Deviation pane only: category name prefixes always dropped regardless of
-     * std dev (big, lumpy, irregular spikes that swamp the chart). A prefix like
-     * "Auto & Transport" drops that category and all its sub-categories.
+     * Predictable yearly or occasional categories. They remain in ordinary
+     * spending totals but are omitted from the deviation tables and charts.
+     * Each name also matches its subcategories.
+     */
+    private static final Set<String> annualCategories =
+            Set.of("Taxes:Federal Tax", "Safety Deposit Box",
+                    "DMV License Renewal", "Prime");
+
+    /**
+     * Other category prefixes always dropped from deviation panes regardless of
+     * variability. A prefix like "Auto & Transport" also drops its subcategories.
      */
     private static final Set<String> deviationExcluded =
-            Set.of("Taxes:Federal Tax", "Auto & Transport");
+            Set.of("Auto & Transport");
 
     /**
      * Categories to omit entirely. Account-to-account transfers and card
