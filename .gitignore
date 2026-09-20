@@ -80,6 +80,8 @@ testfile.txt
 ###############################################################################
 # Personal financial data (never commit)
 ###############################################################################
+/private/
+/reports/
 /all.csv
 /uncategorized-checks.csv
 /recurring-charges-review.csv
