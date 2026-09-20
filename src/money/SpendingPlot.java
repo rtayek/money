@@ -1497,11 +1497,11 @@ public final class SpendingPlot {
 
     /** Where the uncategorized-checks report is written, matching UncategorizedCheckReport's default. */
     private static final Path uncategorizedChecksOutput =
-            Path.of("build", "reports", "uncategorized-checks.csv");
+            Path.of("reports", "uncategorized-checks.csv");
 
     /** Where the recurring-payment candidate report is written. */
     private static final Path recurringCandidatesOutput =
-            Path.of("build", "reports", "recurring-candidates.csv");
+            Path.of("reports", "recurring-candidates.csv");
 
     /** Messages shown in the Diagnostics tab for the current run. */
     private static final List<String> diagnostics = new ArrayList<>();
