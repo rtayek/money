@@ -28,6 +28,7 @@ import java.text.NumberFormat;
 import java.time.LocalDate;
 import java.time.YearMonth;
 import java.time.format.DateTimeFormatter;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashSet;
@@ -76,6 +77,11 @@ public final class SpendingPlot {
 
     /** A single spending transaction (amount is a positive outflow). */
     record Transaction(LocalDate date, String category, String payee, double amount) {}
+
+    /** A repeated fixed-amount payment that deserves recurring-charge review. */
+    record RecurringCandidate(String payee, double amount, String cadence,
+            int occurrences, LocalDate firstDate, LocalDate lastDate,
+            double annualizedAmount, String category, String status) {}
 
     /** True if a category should be excluded from the deviation pane. */
     private static boolean isDeviationExcluded(String category) {
@@ -379,6 +385,121 @@ public final class SpendingPlot {
                     t.date(), amount, t.payee());
         }
         System.out.printf(Locale.US, "%-12s %,12.2f%n", "Total", total);
+    }
+
+    /**
+     * Finds conservative recurring-payment candidates. Payments are grouped by
+     * normalized payee and exact amount, then accepted only when at least 75%
+     * of their date gaps fit a common cadence.
+     */
+    static List<RecurringCandidate> findRecurringCandidates(
+            List<Transaction> transactions) {
+        Map<String, List<Transaction>> groups = new LinkedHashMap<>();
+        for (Transaction t : transactions) {
+            if (t.date() == null || t.payee() == null || t.payee().isBlank()) continue;
+            String payeeKey = t.payee().strip().toUpperCase(Locale.ROOT)
+                    .replaceAll("\\s+", " ");
+            long cents = Math.round(t.amount() * 100);
+            groups.computeIfAbsent(payeeKey + "\u0000" + cents,
+                    _ -> new ArrayList<>()).add(t);
+        }
+
+        List<RecurringCandidate> out = new ArrayList<>();
+        for (List<Transaction> group : groups.values()) {
+            group.sort(Comparator.comparing(Transaction::date));
+            String cadence = detectCadence(group);
+            if (cadence == null) continue;
+
+            TreeSet<String> categories = new TreeSet<>(String.CASE_INSENSITIVE_ORDER);
+            boolean uncategorized = false;
+            for (Transaction t : group) {
+                categories.add(t.category());
+                if (isUncategorized(t)) uncategorized = true;
+            }
+            String category = String.join(" / ", categories);
+            String status = uncategorized ? "UNCATEGORIZED"
+                    : categories.size() > 1 ? "MIXED" : "OK";
+            Transaction first = group.get(0);
+            Transaction last = group.get(group.size() - 1);
+            double amount = first.amount();
+            out.add(new RecurringCandidate(first.payee(), amount, cadence,
+                    group.size(), first.date(), last.date(),
+                    annualizedAmount(cadence, amount), category, status));
+        }
+        out.sort(Comparator.comparingDouble(
+                RecurringCandidate::annualizedAmount).reversed()
+                .thenComparing(RecurringCandidate::payee));
+        return out;
+    }
+
+    /** Returns a cadence name when enough gaps fit one supported interval. */
+    private static String detectCadence(List<Transaction> group) {
+        if (group.size() < 2) return null;
+        List<Long> gaps = new ArrayList<>();
+        for (int i = 1; i < group.size(); i++) {
+            long days = ChronoUnit.DAYS.between(
+                    group.get(i - 1).date(), group.get(i).date());
+            if (days > 0) gaps.add(days);
+        }
+        if (gaps.isEmpty()) return null;
+
+        String[] names = {"Weekly", "Monthly", "Every 2 months",
+                "Quarterly", "Semiannual", "Annual"};
+        int[][] ranges = {{5, 10}, {24, 38}, {50, 75},
+                {76, 110}, {150, 220}, {300, 430}};
+        for (int i = 0; i < names.length; i++) {
+            if (!names[i].equals("Annual") && group.size() < 3) continue;
+            int matching = 0;
+            for (long gap : gaps)
+                if (gap >= ranges[i][0] && gap <= ranges[i][1]) matching++;
+            int needed = (int) Math.ceil(gaps.size() * 0.75);
+            if (matching >= needed) return names[i];
+        }
+        return null;
+    }
+
+    private static double annualizedAmount(String cadence, double amount) {
+        return amount * switch (cadence) {
+            case "Weekly" -> 52;
+            case "Monthly" -> 12;
+            case "Every 2 months" -> 6;
+            case "Quarterly" -> 4;
+            case "Semiannual" -> 2;
+            default -> 1;
+        };
+    }
+
+    /** Writes recurring candidates to a CSV report. */
+    static void writeRecurringCandidates(List<RecurringCandidate> candidates,
+                                         Path output) {
+        List<String> lines = new ArrayList<>();
+        lines.add("Payee,Amount,Cadence,Occurrences,First Date,Last Date,"
+                + "Annualized Amount,Category,Status");
+        for (RecurringCandidate c : candidates) {
+            lines.add(String.join(",",
+                    csvCell(c.payee()),
+                    String.format(Locale.US, "%.2f", c.amount()),
+                    csvCell(c.cadence()),
+                    Integer.toString(c.occurrences()),
+                    c.firstDate().toString(),
+                    c.lastDate().toString(),
+                    String.format(Locale.US, "%.2f", c.annualizedAmount()),
+                    csvCell(c.category()),
+                    csvCell(c.status())));
+        }
+        try {
+            Path parent = output.toAbsolutePath().getParent();
+            if (parent != null) Files.createDirectories(parent);
+            Files.write(output, lines, StandardCharsets.UTF_8);
+        } catch (IOException e) {
+            throw new UncheckedIOException("Could not write " + output, e);
+        }
+    }
+
+    private static String csvCell(String value) {
+        String s = value == null ? "" : value;
+        return (s.contains(",") || s.contains("\"") || s.contains("\n"))
+                ? "\"" + s.replace("\"", "\"\"") + "\"" : s;
     }
 
     /** Aggregates transactions into per-category totals, sorted largest first. */
@@ -1168,6 +1289,7 @@ public final class SpendingPlot {
 
         List<Transaction> spending = toSpendingTransactions(all);
         List<CategoryTotal> totals = categoryTotals(spending);
+        List<RecurringCandidate> recurring = findRecurringCandidates(spending);
         totals.forEach(ct -> System.out.printf(Locale.US, "%-30s %,12.2f%n",
                 ct.category(), ct.total()));
         SwingUtilities.invokeLater(
@@ -1178,6 +1300,9 @@ public final class SpendingPlot {
         writeUncategorizedChecks(checks, uncategorizedChecksOutput);
         System.out.printf(Locale.US, "Wrote %d uncategorized checks to %s%n",
                 checks.size(), uncategorizedChecksOutput.toAbsolutePath());
+        writeRecurringCandidates(recurring, recurringCandidatesOutput);
+        System.out.printf(Locale.US, "Wrote %d recurring candidates to %s%n",
+                recurring.size(), recurringCandidatesOutput.toAbsolutePath());
         printUncategorized(all);
     }
 
@@ -1232,7 +1357,11 @@ public final class SpendingPlot {
 
     /** Where the uncategorized-checks report is written. */
     private static final Path uncategorizedChecksOutput =
-            Path.of("build", "reports", "uncategorized-checks.csv");
+            Path.of("reports", "uncategorized-checks.csv");
+
+    /** Where the recurring-payment candidate report is written. */
+    private static final Path recurringCandidatesOutput =
+            Path.of("reports", "recurring-candidates.csv");
 
     /** Payee pattern for a paper check, e.g. "Check 1234". */
     private static final Pattern checkPayee =
