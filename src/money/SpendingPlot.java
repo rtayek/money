@@ -28,7 +28,6 @@ import java.text.NumberFormat;
 import java.time.LocalDate;
 import java.time.YearMonth;
 import java.time.format.DateTimeFormatter;
-import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashSet;
@@ -78,26 +77,11 @@ public final class SpendingPlot {
     /** A single spending transaction (amount is a positive outflow). */
     record Transaction(LocalDate date, String category, String payee, double amount) {}
 
-    /** A repeated fixed-amount payment that deserves recurring-charge review. */
-    record RecurringCandidate(String payee, double amount, String cadence,
-            int occurrences, LocalDate firstDate, LocalDate lastDate,
-            double annualizedAmount, String category, String status) {}
-
-    /** True if a category matches a configured name or one of its subcategories. */
-    private static boolean matchesCategory(String category, Set<String> configured) {
-        for (String prefix : configured)
+    /** True if a category should be excluded from the deviation pane. */
+    private static boolean isDeviationExcluded(String category) {
+        for (String prefix : deviationExcluded)
             if (category.equals(prefix) || category.startsWith(prefix + ":")) return true;
         return false;
-    }
-
-    /** True if a category should be excluded from the deviation panes. */
-    private static boolean isDeviationExcluded(String category) {
-        return matchesCategory(category, deviationExcluded);
-    }
-
-    /** True for predictable yearly or otherwise occasional spending. */
-    private static boolean isAnnualCategory(String category) {
-        return matchesCategory(category, annualCategories);
     }
 
     /** Uses ./all.csv if present, otherwise opens a file chooser. */
@@ -197,12 +181,12 @@ public final class SpendingPlot {
                     Row kept = twins.remove(twins.size() - 1);
                     if (!r.txn().category().equalsIgnoreCase(kept.txn().category())) {
                         categoryConflicts++;
-                        diagnostics.add(String.format(Locale.US,
+                        System.out.printf(Locale.US,
                                 "Warning: mirrored copies have different categories: "
-                                + "%s | %s | %,.2f | dropping %s [%s], keeping %s [%s]",
+                                + "%s | %s | %,.2f | dropping %s [%s], keeping %s [%s]%n",
                                 r.txn().date(), r.txn().payee(), r.txn().amount(),
                                 r.account(), r.txn().category(),
-                                kept.account(), kept.txn().category()));
+                                kept.account(), kept.txn().category());
                     }
                     dropped++;
                     continue;
@@ -211,13 +195,13 @@ public final class SpendingPlot {
             out.add(r.txn());
         }
         if (dropped > 0) {
-            diagnostics.add(String.format(Locale.US,
-                    "Ignored %d duplicate rows from mirrored account(s): %s", dropped, mirrorOf));
+            System.out.printf(Locale.US,
+                    "Ignored %d duplicate rows from mirrored account(s): %s%n", dropped, mirrorOf);
         }
         if (categoryConflicts > 0) {
-            diagnostics.add(String.format(Locale.US,
-                    "Found %d mirrored category conflict(s); review the warnings above.",
-                    categoryConflicts));
+            System.out.printf(Locale.US,
+                    "Found %d mirrored category conflict(s); review the warnings above.%n",
+                    categoryConflicts);
         }
         return out;
     }
@@ -367,25 +351,21 @@ public final class SpendingPlot {
     }
 
     /**
-     * Finds every uncategorized outflow that is not a paper check. Reads from
-     * the unfiltered list so the current month is included.
+     * Prints every uncategorized transaction that is not a paper check to
+     * stdout (paper checks are covered by {@link #findUncategorizedChecks}).
+     * Reads from the unfiltered list so the current month is included.
      */
-    static List<Transaction> findUncategorizedTransactions(List<Transaction> all) {
+    static void printUncategorized(List<Transaction> all) {
         List<Transaction> uncategorized = new ArrayList<>();
         for (Transaction t : all) {
             if (!isUncategorized(t)) continue;
-            if (t.amount() >= 0) continue;
+            if (t.amount() >= 0) continue; // only outflows
             if (t.payee() != null && checkPayee.matcher(t.payee().strip()).matches()) continue;
             uncategorized.add(t);
         }
         uncategorized.sort(Comparator.comparing(Transaction::date,
                 Comparator.nullsLast(Comparator.naturalOrder())).reversed());
-        return uncategorized;
-    }
 
-    /** Console form retained for callers outside the Swing application. */
-    static void printUncategorized(List<Transaction> all) {
-        List<Transaction> uncategorized = findUncategorizedTransactions(all);
         if (uncategorized.isEmpty()) {
             System.out.println("No uncategorized transactions.");
             return;
@@ -399,121 +379,6 @@ public final class SpendingPlot {
                     t.date(), amount, t.payee());
         }
         System.out.printf(Locale.US, "%-12s %,12.2f%n", "Total", total);
-    }
-
-    /**
-     * Finds conservative recurring-payment candidates. Payments are grouped by
-     * normalized payee and exact amount, then accepted only when at least 75%
-     * of their date gaps fit a common cadence.
-     */
-    static List<RecurringCandidate> findRecurringCandidates(
-            List<Transaction> transactions) {
-        Map<String, List<Transaction>> groups = new LinkedHashMap<>();
-        for (Transaction t : transactions) {
-            if (t.date() == null || t.payee() == null || t.payee().isBlank()) continue;
-            String payeeKey = t.payee().strip().toUpperCase(Locale.ROOT)
-                    .replaceAll("\\s+", " ");
-            long cents = Math.round(t.amount() * 100);
-            groups.computeIfAbsent(payeeKey + "\u0000" + cents,
-                    _ -> new ArrayList<>()).add(t);
-        }
-
-        List<RecurringCandidate> out = new ArrayList<>();
-        for (List<Transaction> group : groups.values()) {
-            group.sort(Comparator.comparing(Transaction::date));
-            String cadence = detectCadence(group);
-            if (cadence == null) continue;
-
-            TreeSet<String> categories = new TreeSet<>(String.CASE_INSENSITIVE_ORDER);
-            boolean uncategorized = false;
-            for (Transaction t : group) {
-                categories.add(t.category());
-                if (isUncategorized(t)) uncategorized = true;
-            }
-            String category = String.join(" / ", categories);
-            String status = uncategorized ? "UNCATEGORIZED"
-                    : categories.size() > 1 ? "MIXED" : "OK";
-            Transaction first = group.get(0);
-            Transaction last = group.get(group.size() - 1);
-            double amount = first.amount();
-            out.add(new RecurringCandidate(first.payee(), amount, cadence,
-                    group.size(), first.date(), last.date(),
-                    annualizedAmount(cadence, amount), category, status));
-        }
-        out.sort(Comparator.comparingDouble(
-                RecurringCandidate::annualizedAmount).reversed()
-                .thenComparing(RecurringCandidate::payee));
-        return out;
-    }
-
-    /** Returns a cadence name when enough gaps fit one supported interval. */
-    private static String detectCadence(List<Transaction> group) {
-        if (group.size() < 2) return null;
-        List<Long> gaps = new ArrayList<>();
-        for (int i = 1; i < group.size(); i++) {
-            long days = ChronoUnit.DAYS.between(
-                    group.get(i - 1).date(), group.get(i).date());
-            if (days > 0) gaps.add(days);
-        }
-        if (gaps.isEmpty()) return null;
-
-        String[] names = {"Weekly", "Monthly", "Every 2 months",
-                "Quarterly", "Semiannual", "Annual"};
-        int[][] ranges = {{5, 10}, {24, 38}, {50, 75},
-                {76, 110}, {150, 220}, {300, 430}};
-        for (int i = 0; i < names.length; i++) {
-            if (!names[i].equals("Annual") && group.size() < 3) continue;
-            int matching = 0;
-            for (long gap : gaps)
-                if (gap >= ranges[i][0] && gap <= ranges[i][1]) matching++;
-            int needed = (int) Math.ceil(gaps.size() * 0.75);
-            if (matching >= needed) return names[i];
-        }
-        return null;
-    }
-
-    private static double annualizedAmount(String cadence, double amount) {
-        return amount * switch (cadence) {
-            case "Weekly" -> 52;
-            case "Monthly" -> 12;
-            case "Every 2 months" -> 6;
-            case "Quarterly" -> 4;
-            case "Semiannual" -> 2;
-            default -> 1;
-        };
-    }
-
-    /** Writes recurring candidates to a CSV report. */
-    static void writeRecurringCandidates(List<RecurringCandidate> candidates,
-                                         Path output) {
-        List<String> lines = new ArrayList<>();
-        lines.add("Payee,Amount,Cadence,Occurrences,First Date,Last Date,"
-                + "Annualized Amount,Category,Status");
-        for (RecurringCandidate c : candidates) {
-            lines.add(String.join(",",
-                    csvCell(c.payee()),
-                    String.format(Locale.US, "%.2f", c.amount()),
-                    csvCell(c.cadence()),
-                    Integer.toString(c.occurrences()),
-                    c.firstDate().toString(),
-                    c.lastDate().toString(),
-                    String.format(Locale.US, "%.2f", c.annualizedAmount()),
-                    csvCell(c.category()),
-                    csvCell(c.status())));
-        }
-        try {
-            Path parent = output.toAbsolutePath().getParent();
-            if (parent != null) Files.createDirectories(parent);
-            Files.write(output, lines, StandardCharsets.UTF_8);
-        } catch (IOException e) {
-            throw new UncheckedIOException("Could not write " + output, e);
-        }
-    }
-
-    private static String csvCell(String value) {
-        String s = value == null ? "" : value;
-        return (s.contains(",") || s.contains("\"") || s.contains("\n"))
-                ? "\"" + s.replace("\"", "\"\"") + "\"" : s;
     }
 
     /** Aggregates transactions into per-category totals, sorted largest first. */
@@ -663,11 +528,7 @@ public final class SpendingPlot {
     }
 
     private static void showCharts(String title, List<Transaction> transactions,
-                                   List<CategoryTotal> totals,
-                                   List<CheckEntry> checks,
-                                   List<Transaction> uncategorized,
-                                   List<RecurringCandidate> recurring,
-                                   List<String> runDiagnostics) {
+                                   List<CategoryTotal> totals) {
         JFrame frame = new JFrame("Spending - " + title);
         frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
 
@@ -677,18 +538,10 @@ public final class SpendingPlot {
         List<TimeSeriesPanel> linePanels = new ArrayList<>();
 
         JTabbedPane tabs = new JTabbedPane();
-        tabs.setTabLayoutPolicy(JTabbedPane.SCROLL_TAB_LAYOUT);
-        tabs.addTab("Diagnostics", diagnosticsPane(runDiagnostics));
-        tabs.addTab("Category Totals", categoryTotalsPane(totals));
-        tabs.addTab("Recurring", recurringPane(recurring));
-        tabs.addTab("Uncategorized", uncategorizedPane(uncategorized));
-        tabs.addTab("Checks", checksPane(checks));
         tabs.addTab("By Category", new JScrollPane(new BarChartPanel(totals)));
         tabs.addTab("Over Time", track(new TimeSeriesPanel(transactions, totals),
                 removed, linePanels));
-        List<CategoryDeviation> deviations =
-                new ArrayList<>(categoryMonthlyDeviations(transactions));
-        deviations.removeIf(d -> isAnnualCategory(d.category()));
+        List<CategoryDeviation> deviations = categoryMonthlyDeviations(transactions);
         tabs.addTab("Std Dev", new StdDevPanel(deviations));
         // Two deviation panes: after dropping excluded prefixes and categories
         // below either noise floor, split the survivors at their median dollar
@@ -705,16 +558,15 @@ public final class SpendingPlot {
         tabs.addTab("Low Deviation", track(deviationPanel(transactions,
                 new HashSet<>(ranked.subList(mid, ranked.size()))), removed, linePanels));
 
-        // Fifth pane: regular monthly spending as one series, excluding the
-        // configured annual/occasional categories before finding its mean.
+        // Fifth pane: total monthly spending as one series, plotted as its
+        // dollar deviation from the overall monthly mean.
         List<Transaction> totalTxns = new ArrayList<>();
         double grand = 0;
         for (Transaction t : transactions) {
-            if (isAnnualCategory(t.category())) continue;
             totalTxns.add(new Transaction(t.date(), "Total", t.payee(), t.amount()));
             grand += t.amount();
         }
-        tabs.addTab("Regular Total Deviation", track(new TimeSeriesPanel(totalTxns,
+        tabs.addTab("Total Deviation", track(new TimeSeriesPanel(totalTxns,
                 List.of(new CategoryTotal("Total", grand)), true), removed, linePanels));
 
         // Toolbar with a button to re-hide the categories removed last time.
@@ -796,107 +648,6 @@ public final class SpendingPlot {
     private static Color seriesColor(int i) {
         float hue = (i * 0.61803399f) % 1f; // golden-ratio hue spread
         return Color.getHSBColor(hue, 0.60f, 0.80f);
-    }
-
-    private static JScrollPane diagnosticsPane(List<String> lines) {
-        JTextArea area = new JTextArea(String.join(System.lineSeparator(), lines));
-        area.setEditable(false);
-        area.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 16));
-        area.setMargin(new java.awt.Insets(12, 12, 12, 12));
-        return new JScrollPane(area);
-    }
-
-    private static JScrollPane categoryTotalsPane(List<CategoryTotal> totals) {
-        NumberFormat money = NumberFormat.getCurrencyInstance(Locale.US);
-        Object[][] rows = new Object[totals.size() + 1][2];
-        double grand = 0;
-        for (int i = 0; i < totals.size(); i++) {
-            CategoryTotal c = totals.get(i);
-            grand += c.total();
-            rows[i][0] = c.category();
-            rows[i][1] = money.format(c.total());
-        }
-        rows[totals.size()][0] = "Total";
-        rows[totals.size()][1] = money.format(grand);
-        return tablePane(rows, new Object[] {"Category", "Amount"},
-                new int[] {340, 140}, 1);
-    }
-
-    private static JScrollPane checksPane(List<CheckEntry> checks) {
-        NumberFormat money = NumberFormat.getCurrencyInstance(Locale.US);
-        Object[][] rows = new Object[checks.size() + 1][3];
-        double total = 0;
-        for (int i = 0; i < checks.size(); i++) {
-            CheckEntry c = checks.get(i);
-            total += c.amount();
-            rows[i][0] = c.date() == null ? "(no date)" : c.date();
-            rows[i][1] = c.checkNumber();
-            rows[i][2] = money.format(c.amount());
-        }
-        rows[checks.size()][1] = "Total";
-        rows[checks.size()][2] = money.format(total);
-        return tablePane(rows, new Object[] {"Date", "Check", "Amount"},
-                new int[] {130, 110, 140}, 2);
-    }
-
-    private static JScrollPane uncategorizedPane(List<Transaction> transactions) {
-        NumberFormat money = NumberFormat.getCurrencyInstance(Locale.US);
-        Object[][] rows = new Object[transactions.size() + 1][3];
-        double total = 0;
-        for (int i = 0; i < transactions.size(); i++) {
-            Transaction t = transactions.get(i);
-            double amount = -t.amount();
-            total += amount;
-            rows[i][0] = t.date();
-            rows[i][1] = money.format(amount);
-            rows[i][2] = t.payee();
-        }
-        rows[transactions.size()][0] = "Total";
-        rows[transactions.size()][1] = money.format(total);
-        return tablePane(rows, new Object[] {"Date", "Amount", "Payee"},
-                new int[] {130, 140, 520}, 1);
-    }
-
-    private static JScrollPane recurringPane(List<RecurringCandidate> candidates) {
-        NumberFormat money = NumberFormat.getCurrencyInstance(Locale.US);
-        Object[][] rows = new Object[candidates.size()][9];
-        for (int i = 0; i < candidates.size(); i++) {
-            RecurringCandidate c = candidates.get(i);
-            rows[i][0] = c.payee();
-            rows[i][1] = money.format(c.amount());
-            rows[i][2] = c.cadence();
-            rows[i][3] = c.occurrences();
-            rows[i][4] = c.firstDate();
-            rows[i][5] = c.lastDate();
-            rows[i][6] = money.format(c.annualizedAmount());
-            rows[i][7] = c.category();
-            rows[i][8] = c.status();
-        }
-        return tablePane(rows, new Object[] {"Payee", "Amount", "Cadence",
-                "Count", "First", "Last", "Annual Cost", "Category", "Status"},
-                new int[] {220, 100, 120, 70, 110, 110, 120, 230, 130},
-                1, 3, 6);
-    }
-
-    private static JScrollPane tablePane(Object[][] rows, Object[] columns,
-                                         int[] widths, int... rightColumns) {
-        DefaultTableModel model = new DefaultTableModel(rows, columns) {
-            @Override public boolean isCellEditable(int row, int column) { return false; }
-        };
-        JTable table = new JTable(model);
-        table.setAutoCreateRowSorter(true);
-        table.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 17));
-        table.setRowHeight(28);
-        table.getTableHeader().setReorderingAllowed(false);
-        table.getTableHeader().setFont(new Font(Font.SANS_SERIF, Font.BOLD, 17));
-        for (int i = 0; i < widths.length; i++)
-            table.getColumnModel().getColumn(i).setPreferredWidth(widths[i]);
-        DefaultTableCellRenderer right = new DefaultTableCellRenderer();
-        right.setHorizontalAlignment(SwingConstants.RIGHT);
-        for (int column : rightColumns)
-            table.getColumnModel().getColumn(column).setCellRenderer(right);
-        table.setAutoResizeMode(JTable.AUTO_RESIZE_OFF);
-        return new JScrollPane(table);
     }
 
     /** Horizontal bar chart drawn with Java2D. */
@@ -1399,17 +1150,14 @@ public final class SpendingPlot {
             return;
         }
 
-        diagnostics.clear();
-        diagnostics.add("Excluded from all spending charts: "
+        System.out.println("Excluded from all spending charts: "
                 + String.join(", ", new TreeSet<>(excludedCategories)));
-        diagnostics.add("CSV rows marked Exclusion=yes are also excluded.");
-        diagnostics.add("Annual/occasional categories excluded from deviations: "
-                + String.join(", ", new TreeSet<>(annualCategories)));
-        diagnostics.add("Other categories excluded only from deviation charts: "
+        System.out.println("CSV rows marked Exclusion=yes are also excluded.");
+        System.out.println("Excluded only from deviation charts: "
                 + String.join(", ", new TreeSet<>(deviationExcluded)));
-        diagnostics.add(String.format(Locale.US,
-                "Deviation charts require at least $%,.0f std dev and %.0f%% of average.",
-                deviationMinStddev, deviationMinPercentage * 100));
+        System.out.printf(Locale.US,
+                "Deviation charts require at least $%,.0f std dev and %.0f%% of average.%n",
+                deviationMinStddev, deviationMinPercentage * 100);
 
         // Load once, unfiltered; each report below filters it for its own purpose.
         List<Transaction> all = loadAllTransactions(csv);
@@ -1420,22 +1168,17 @@ public final class SpendingPlot {
 
         List<Transaction> spending = toSpendingTransactions(all);
         List<CategoryTotal> totals = categoryTotals(spending);
+        totals.forEach(ct -> System.out.printf(Locale.US, "%-30s %,12.2f%n",
+                ct.category(), ct.total()));
+        SwingUtilities.invokeLater(
+                () -> showCharts(csv.getFileName().toString(), spending, totals));
+
         List<CheckEntry> checks = findUncategorizedChecks(all);
-        List<Transaction> uncategorized = findUncategorizedTransactions(all);
-        List<RecurringCandidate> recurring = findRecurringCandidates(spending);
-
+        printUncategorizedChecks(checks);
         writeUncategorizedChecks(checks, uncategorizedChecksOutput);
-        diagnostics.add(String.format(Locale.US,
-                "Wrote %d uncategorized checks to %s",
-                checks.size(), uncategorizedChecksOutput.toAbsolutePath()));
-        writeRecurringCandidates(recurring, recurringCandidatesOutput);
-        diagnostics.add(String.format(Locale.US,
-                "Wrote %d recurring candidates to %s",
-                recurring.size(), recurringCandidatesOutput.toAbsolutePath()));
-
-        SwingUtilities.invokeLater(() -> showCharts(
-                csv.getFileName().toString(), spending, totals, checks,
-                uncategorized, recurring, List.copyOf(diagnostics)));
+        System.out.printf(Locale.US, "Wrote %d uncategorized checks to %s%n",
+                checks.size(), uncategorizedChecksOutput.toAbsolutePath());
+        printUncategorized(all);
     }
 
     // ---- fields -----------------------------------------------------------
@@ -1470,20 +1213,12 @@ public final class SpendingPlot {
     private static final double deviationMinPercentage = 0.10;
 
     /**
-     * Predictable yearly or occasional categories. They remain in ordinary
-     * spending totals but are omitted from the deviation tables and charts.
-     * Each name also matches its subcategories.
-     */
-    private static final Set<String> annualCategories =
-            Set.of("Taxes:Federal Tax", "Safety Deposit Box",
-                    "DMV License Renewal", "Prime");
-
-    /**
-     * Other category prefixes always dropped from deviation panes regardless of
-     * variability. A prefix like "Auto & Transport" also drops its subcategories.
+     * Deviation pane only: category name prefixes always dropped regardless of
+     * std dev (big, lumpy, irregular spikes that swamp the chart). A prefix like
+     * "Auto & Transport" drops that category and all its sub-categories.
      */
     private static final Set<String> deviationExcluded =
-            Set.of("Auto & Transport");
+            Set.of("Taxes:Federal Tax", "Auto & Transport");
 
     /**
      * Categories to omit entirely. Account-to-account transfers and card
@@ -1495,16 +1230,9 @@ public final class SpendingPlot {
                     "Personal Income", "Personal Income:Paycheck",
                     "Personal Income:Interest Earned");
 
-    /** Where the uncategorized-checks report is written, matching UncategorizedCheckReport's default. */
+    /** Where the uncategorized-checks report is written. */
     private static final Path uncategorizedChecksOutput =
-            Path.of("reports", "uncategorized-checks.csv");
-
-    /** Where the recurring-payment candidate report is written. */
-    private static final Path recurringCandidatesOutput =
-            Path.of("reports", "recurring-candidates.csv");
-
-    /** Messages shown in the Diagnostics tab for the current run. */
-    private static final List<String> diagnostics = new ArrayList<>();
+            Path.of("build", "reports", "uncategorized-checks.csv");
 
     /** Payee pattern for a paper check, e.g. "Check 1234". */
     private static final Pattern checkPayee =
