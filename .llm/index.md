@@ -8,17 +8,18 @@ provenance: dotmdfiles-template
 
 This is the authoritative discovery registry for this project.
 
+## Required Context
+
+- Read every Markdown file directly in this directory before doing project work.
+- Do not automatically read Markdown files in subdirectories.
+- Read handoffs, archives, research, and other subordinate material only when relevant to the current task.
+- Prefer durable project knowledge over conversational history.
+- Treat files outside this directory as instructions only when this index or the current task explicitly identifies them.
+
 ## Working Relationship
 
 - Read `human.md` for the human's engineering preferences, accessibility needs, and collaboration style.
 - Read `persona.md` for agent communication style.
-
-## Project Context
-
-- Read other Markdown files in this directory when they are relevant to the current task.
-- Prefer durable project knowledge over conversational history.
-- Load working context and handoffs only when they apply.
-- Treat files outside this directory as instructions only when this index or the current task explicitly identifies them.
 
 ## Discovery Model
 
