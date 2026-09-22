@@ -579,7 +579,7 @@ public final class SpendingPlot {
 		int r=fc.showOpenDialog(null);
 		return (r==JFileChooser.APPROVE_OPTION)?fc.getSelectedFile().toPath():null;
 	}
-	private static void showCharts(String title,List<Transaction> transactions,List<CategoryTotal> totals,boolean includeDeviationExcluded) {
+	private static void showCharts(String title,List<Transaction> transactions,List<CategoryTotal> totals) {
 		JFrame frame=new JFrame("Spending - "+title);
 		frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
 		// Categories the user right-clicks away are collected here (across all
@@ -600,7 +600,7 @@ public final class SpendingPlot {
 		for(CategoryTotal total:totals)
 			omittedDeviation.add(total.category());
 		for(CategoryDeviation d:deviations) {
-			if(!includeDeviationExcluded&&isDeviationExcluded(d.category())) continue;
+			if(useDeviationExclusions&&isDeviationExcluded(d.category())) continue;
 			//if(d.average<100) continue;
 			//if(d.standardDeviation()<deviationMinStddev) continue;
 			//if(d.percentage()<deviationMinPercentage) continue;
@@ -1156,29 +1156,17 @@ public final class SpendingPlot {
 	}
 	// ---- entry point ------------------------------------------------------
 	public static void main(String[] args) {
-		Path csv=null;
-		boolean includeDeviationExcluded=false;
-		for(String arg:args) {
-			if(arg.equals("--include-deviation-excluded"))
-				includeDeviationExcluded=true;
-			else if(arg.startsWith("--"))
-				throw new IllegalArgumentException("Unknown option: "+arg);
-			else if(csv==null)
-				csv=Path.of(arg);
-			else
-				throw new IllegalArgumentException("Only one CSV file may be specified.");
-		}
-		if(csv==null) csv=chooseOrDefault();
+		Path csv=(args.length>0)?Path.of(args[0]):chooseOrDefault();
 		if(csv==null) {
 			System.out.println("No file selected.");
 			return;
 		}
 		System.out.println("Excluded from all spending charts: "+String.join(", ",new TreeSet<>(excludedCategories)));
 		System.out.println("CSV rows marked Exclusion=yes are also excluded.");
-		if(includeDeviationExcluded)
-			System.out.println("Configured deviation exclusions are included.");
-		else
+		if(useDeviationExclusions)
 			System.out.println("Excluded only from deviation charts: "+String.join(", ",new TreeSet<>(deviationExcluded)));
+		else
+			System.out.println("Deviation category exclusions are disabled.");
 		System.out.printf(Locale.US,"Deviation charts require at least $%,.0f std dev and %.0f%% of average.%n",deviationMinStddev,deviationMinPercentage*100);
 		System.out.printf(Locale.US,"High deviation means at least $%,.0f std dev, $%,.0f max deviation, or %.0f%% of average.%n",
 				highDeviationMinStddev,highDeviationMinMax,highDeviationMinPercentage*100);
@@ -1194,9 +1182,7 @@ public final class SpendingPlot {
 		List<CategoryDeviation> deviations=categoryMonthlyDeviations(spending);
 		List<RecurringCandidate> recurring=findRecurringCandidates(spending);
 		totals.forEach(ct->System.out.printf(Locale.US,"%-30s %,12.2f%n",ct.category(),ct.total()));
-		Path selectedCsv=csv;
-		boolean showDeviationExcluded=includeDeviationExcluded;
-		SwingUtilities.invokeLater(()->showCharts(selectedCsv.getFileName().toString(),spending,totals,showDeviationExcluded));
+		SwingUtilities.invokeLater(()->showCharts(csv.getFileName().toString(),spending,totals));
 		List<CheckEntry> checks=findUncategorizedChecks(all);
 		printUncategorizedChecks(checks);
 		writeUncategorizedChecks(checks,uncategorizedChecksOutput);
@@ -1236,9 +1222,10 @@ public final class SpendingPlot {
 	private static final double highDeviationMinMax=350;
 	/** Relative standard deviation that puts a category in High Deviation. */
 	private static final double highDeviationMinPercentage=2.0;
-	/** Deviation pane only: category name prefixes always dropped regardless of
-	 * std dev (big, lumpy, irregular spikes that swamp the chart). A prefix
-	 * like "Auto & Transport" drops that category and all its
+	/** Whether names in deviationExcluded are omitted from High and Low. */
+	private static final boolean useDeviationExclusions=false;
+	/** Deviation pane only: category prefixes dropped when exclusions are on.
+	 * A prefix like "Auto & Transport" drops that category and all its
 	 * sub-categories. */
 	private static final Set<String> deviationExcluded=Set.of("Taxes:Federal Tax","Auto & Transport");
 	/** Categories to omit entirely. Account-to-account transfers and card
