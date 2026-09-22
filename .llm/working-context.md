@@ -89,6 +89,16 @@ or `scripts/simplifi-diff.r`.
 
 ## Deferred
 
+- Own the Plaid data as a real database instead of an overwritten CSV
+  snapshot -- Simplifi doesn't retain the raw merchant descriptor once it
+  cleans a payee name, so the Plaid pull is the only place that detail
+  exists at all. Proposed: SQLite, keyed on Plaid's stable
+  `transaction_id` so repeated pulls accumulate/refresh instead of
+  overwriting. Ray confirmed 2026-09-21 this goes on the list, not done
+  now. Still open when picked back up: does `PullTransactions` write
+  straight to SQLite or keep writing CSV with a separate import step, and
+  do `CategorizationAudit`/`AmexMatchReport` switch to reading the
+  database or stay on CSV with the database as just the archive.
 - Amazon item-level categorization -- blocked on Ray getting
   `amazon-order-history.csv` from Amazon.
 - Extending the Google fixed-amount split across the full ~20-month history
