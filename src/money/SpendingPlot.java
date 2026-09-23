@@ -604,14 +604,18 @@ public final class SpendingPlot {
 			//if(d.average<100) continue;
 			//if(d.standardDeviation()<deviationMinStddev) continue;
 			//if(d.percentage()<deviationMinPercentage) continue;
-			if(d.maxSpending>500)
+			if(d.maxSpending>350) {
 				highDeviation.add(d.category());
+				System.out.println(d+" added to high.");
+			}
 			else if(d.average<25)
 				continue;
 			//else if(d.maxSpending<25)
 			//	continue;
-			else if(d.maxSpending<200)
+			else if(d.maxSpending<200) {
 				lowDeviation.add(d.category());
+				System.out.println("low: "+d);
+			}
 			else if(d.standardDeviation<50)
 				continue;
 			else if(d.standardDeviation()>=highDeviationMinStddev)
