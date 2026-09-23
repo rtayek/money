@@ -2,6 +2,7 @@ package money;
 import java.awt.AWTEvent;
 import java.awt.BasicStroke;
 import java.awt.BorderLayout;
+import java.awt.Component;
 import java.awt.Color;
 import java.awt.Dimension;
 import java.awt.FlowLayout;
@@ -31,6 +32,7 @@ import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashSet;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -591,44 +593,56 @@ public final class SpendingPlot {
 		tabs.addTab("By Category",new JScrollPane(new BarChartPanel(totals)));
 		tabs.addTab("Over Time",track(new TimeSeriesPanel(transactions,totals),removed,linePanels));
 		List<CategoryDeviation> deviations=categoryMonthlyDeviations(transactions);
-		tabs.addTab("Std Dev",new StdDevPanel(deviations));
 		// Two deviation panes: after dropping excluded prefixes and categories
 		// below either noise floor, classify each survivor independently.
 		Set<String> highDeviation=new HashSet<>();
 		Set<String> lowDeviation=new HashSet<>();
 		Set<String> omittedDeviation=new HashSet<>();
-		for(CategoryTotal total:totals)
-			omittedDeviation.add(total.category());
+		Map<String,String> bucketOf=new HashMap<>();
 		for(CategoryDeviation d:deviations) {
-			if(useDeviationExclusions&&isDeviationExcluded(d.category())) continue;
-			//if(d.average<100) continue;
-			//if(d.standardDeviation()<deviationMinStddev) continue;
-			//if(d.percentage()<deviationMinPercentage) continue;
-			if(d.maxSpending>350) {
-				highDeviation.add(d.category());
-				System.out.println(d+" added to high.");
+			String bucket;
+			String why;
+			if(useDeviationExclusions&&isDeviationExcluded(d.category())) {
+				bucket="omitted";
+				why="excluded category";
 			}
-			else if(d.average<25)
-				continue;
-			//else if(d.maxSpending<25)
-			//	continue;
-			else if(d.maxSpending<200) {
-				lowDeviation.add(d.category());
-				System.out.println("low: "+d);
+			else if(d.average()<omittedMaxAverage) {
+				if(d.maxSpending()>omittedSpikeMax) {
+					bucket="high";
+					why="small average $"+String.format(Locale.US,"%.2f",d.average())+" but spiked to $"
+							+String.format(Locale.US,"%.2f",d.maxSpending())+" -- too big to bury in Omitted";
+				}
+				else {
+					bucket="omitted";
+					why="average $"+String.format(Locale.US,"%.2f",d.average())+" below $"+omittedMaxAverage+" floor";
+				}
 			}
-			else if(d.standardDeviation<50)
-				continue;
-			else if(d.standardDeviation()>=highDeviationMinStddev)
-				highDeviation.add(d.category());
-			else if(d.maxDeviation()>=highDeviationMinMax)
-				highDeviation.add(d.category());
-			else if(d.percentage()>=highDeviationMinPercentage)
-				highDeviation.add(d.category());
-			else
-				lowDeviation.add(d.category());
+			else if(d.standardDeviation()<deviationMinStddev&&d.maxDeviation()<highDeviationMinMax) {
+				// Genuinely flat/steady -- decided before any magnitude check gets
+				// a chance to promote a big-but-steady category to High.
+				bucket="low";
+				why="steady: std dev $"+String.format(Locale.US,"%.2f",d.standardDeviation())+", max deviation $"
+						+String.format(Locale.US,"%.2f",d.maxDeviation());
+			}
+			else if(d.standardDeviation()>=highDeviationMinStddev||d.maxDeviation()>=highDeviationMinMax
+					||d.percentage()>=highDeviationMinPercentage) {
+				bucket="high";
+				why="std dev $"+String.format(Locale.US,"%.2f",d.standardDeviation())+", max deviation $"
+						+String.format(Locale.US,"%.2f",d.maxDeviation())+", "+String.format(Locale.US,"%.0f",d.percentage()*100)+"% of average";
+			}
+			else {
+				bucket="low";
+				why="below High thresholds";
+			}
+			switch(bucket) {
+				case "high" -> highDeviation.add(d.category());
+				case "low" -> lowDeviation.add(d.category());
+				default -> omittedDeviation.add(d.category());
+			}
+			bucketOf.put(d.category(),bucket);
+			System.out.printf(Locale.US,"%-9s %-30s %s%n",bucket,d.category(),why);
 		}
-		omittedDeviation.removeAll(highDeviation);
-		omittedDeviation.removeAll(lowDeviation);
+		tabs.addTab("Std Dev",new StdDevPanel(deviations,bucketOf));
 		tabs.addTab("High Deviation",track(deviationPanel(transactions,highDeviation),removed,linePanels));
 		tabs.addTab("High Spending",track(spendingPanel(transactions,highDeviation),removed,linePanels));
 		tabs.addTab("Low Deviation",track(deviationPanel(transactions,lowDeviation),removed,linePanels));
@@ -1113,45 +1127,93 @@ public final class SpendingPlot {
 		private Set<String> removedSink; // collects removed categories, if set
 	}
 	/** Monthly average and variability for every spending category. */
+	/** Background color for a deviation bucket, used across the Std Dev table.
+	 * Strong, saturated colors -- pale tints are too subtle to read reliably. */
+	private static Color bucketColor(String bucket) {
+		return switch(bucket) {
+			case "high" -> new Color(255,120,120);
+			case "low" -> new Color(120,170,255);
+			default -> new Color(180,180,180);
+		};
+	}
 	@SuppressWarnings("serial") static final class StdDevPanel extends JPanel {
-		StdDevPanel(List<CategoryDeviation> deviations) {
+		StdDevPanel(List<CategoryDeviation> deviations,Map<String,String> bucketOf) {
 			super(new BorderLayout());
 			NumberFormat money=NumberFormat.getCurrencyInstance(Locale.US);
 			NumberFormat percent=NumberFormat.getPercentInstance(Locale.US);
 			percent.setMinimumFractionDigits(1);
 			percent.setMaximumFractionDigits(1);
-			Object[][] rows=new Object[deviations.size()][6];
+			Object[][] rows=new Object[deviations.size()][7];
+			String[] bucketByRow=new String[deviations.size()];
 			for(int i=0;i<deviations.size();i++) {
 				CategoryDeviation d=deviations.get(i);
+				String bucket=bucketOf.getOrDefault(d.category(),"omitted");
+				bucketByRow[i]=bucket;
 				rows[i][0]=d.category();
-				rows[i][1]=money.format(d.average());
-				rows[i][2]=money.format(d.standardDeviation());
-				rows[i][3]=money.format(d.maxDeviation());
-				rows[i][4]=money.format(d.maxSpending());
-				rows[i][5]=percent.format(d.percentage());
+				// Numeric columns hold raw Double values, not formatted text, so
+				// the row sorter compares them by value instead of alphabetically
+				// (which would put $9 after $80). The renderer below formats them
+				// for display.
+				rows[i][1]=d.average();
+				rows[i][2]=d.standardDeviation();
+				rows[i][3]=d.maxDeviation();
+				rows[i][4]=d.maxSpending();
+				rows[i][5]=d.percentage();
+				rows[i][6]=bucket.substring(0,1).toUpperCase(Locale.ROOT)+bucket.substring(1);
 			}
-			DefaultTableModel model=new DefaultTableModel(rows,new Object[] {"Category","Monthly Avg","Std Dev","Max Deviation","Max Spending","% of Avg"}) {
+			DefaultTableModel model=new DefaultTableModel(rows,
+					new Object[] {"Category","Monthly Avg","Std Dev","Max Deviation","Max Spending","% of Avg","Status"}) {
 				@Override public boolean isCellEditable(int r,int c) {
 					return false;
 				}
+				@Override public Class<?> getColumnClass(int c) {
+					return (c>=1&&c<=5)?Double.class:String.class;
+				}
 			};
 			JTable table=new JTable(model);
+			table.setAutoCreateRowSorter(true);
 			table.setFont(new Font(Font.SANS_SERIF,Font.PLAIN,17));
 			table.setRowHeight(28);
 			table.getTableHeader().setReorderingAllowed(false);
 			table.getTableHeader().setFont(new Font(Font.SANS_SERIF,Font.BOLD,17));
 			table.getColumnModel().getColumn(0).setPreferredWidth(250);
-			DefaultTableCellRenderer right=new DefaultTableCellRenderer();
+			DefaultTableCellRenderer right=new DefaultTableCellRenderer() {
+				@Override public Component getTableCellRendererComponent(JTable t,Object v,boolean sel,boolean focus,int row,int col) {
+					int modelCol=t.convertColumnIndexToModel(col);
+					Object formatted=(v==null)?"":(modelCol==5?percent.format((Double)v):money.format((Double)v));
+					Component c=super.getTableCellRendererComponent(t,formatted,sel,focus,row,col);
+					c.setBackground(sel?t.getSelectionBackground():bucketColor(bucketByRow[t.convertRowIndexToModel(row)]));
+					return c;
+				}
+			};
 			right.setHorizontalAlignment(SwingConstants.RIGHT);
 			for(int column=1;column<6;column++)
 				table.getColumnModel().getColumn(column).setCellRenderer(right);
+			DefaultTableCellRenderer status=new DefaultTableCellRenderer() {
+				@Override public Component getTableCellRendererComponent(JTable t,Object v,boolean sel,boolean focus,int row,int col) {
+					Component c=super.getTableCellRendererComponent(t,v,sel,focus,row,col);
+					c.setBackground(sel?t.getSelectionBackground():bucketColor(bucketByRow[t.convertRowIndexToModel(row)]));
+					c.setFont(c.getFont().deriveFont(Font.BOLD));
+					return c;
+				}
+			};
+			status.setHorizontalAlignment(SwingConstants.CENTER);
+			table.getColumnModel().getColumn(6).setCellRenderer(status);
+			table.getColumnModel().getColumn(0).setCellRenderer(new DefaultTableCellRenderer() {
+				@Override public Component getTableCellRendererComponent(JTable t,Object v,boolean sel,boolean focus,int row,int col) {
+					Component c=super.getTableCellRendererComponent(t,v,sel,focus,row,col);
+					c.setBackground(sel?t.getSelectionBackground():bucketColor(bucketByRow[t.convertRowIndexToModel(row)]));
+					return c;
+				}
+			});
 			table.getColumnModel().getColumn(1).setPreferredWidth(115);
 			table.getColumnModel().getColumn(2).setPreferredWidth(100);
 			table.getColumnModel().getColumn(3).setPreferredWidth(125);
 			table.getColumnModel().getColumn(4).setPreferredWidth(115);
 			table.getColumnModel().getColumn(5).setPreferredWidth(90);
+			table.getColumnModel().getColumn(6).setPreferredWidth(90);
 			JScrollPane scroll=new JScrollPane(table);
-			scroll.setPreferredSize(new Dimension(820,560));
+			scroll.setPreferredSize(new Dimension(880,560));
 			JPanel center=new JPanel(); // keep the table narrow, don't stretch
 										// it
 			center.add(scroll);
@@ -1171,7 +1233,8 @@ public final class SpendingPlot {
 			System.out.println("Excluded only from deviation charts: "+String.join(", ",new TreeSet<>(deviationExcluded)));
 		else
 			System.out.println("Deviation category exclusions are disabled.");
-		System.out.printf(Locale.US,"Deviation charts require at least $%,.0f std dev and %.0f%% of average.%n",deviationMinStddev,deviationMinPercentage*100);
+		System.out.printf(Locale.US,"Omitted: category average below $%,.0f.%n",omittedMaxAverage);
+		System.out.printf(Locale.US,"Low (steady): std dev below $%,.0f and max deviation below $%,.0f.%n",deviationMinStddev,highDeviationMinMax);
 		System.out.printf(Locale.US,"High deviation means at least $%,.0f std dev, $%,.0f max deviation, or %.0f%% of average.%n",
 				highDeviationMinStddev,highDeviationMinMax,highDeviationMinPercentage*100);
 		// Load once, unfiltered; each report below filters it for its own
@@ -1228,6 +1291,12 @@ public final class SpendingPlot {
 	private static final double highDeviationMinPercentage=2.0;
 	/** Whether names in deviationExcluded are omitted from High and Low. */
 	private static final boolean useDeviationExclusions=false;
+	/** Categories averaging less than this are omitted outright -- too small
+	 * to be worth a deviation chart of either kind. */
+	private static final double omittedMaxAverage=25;
+	/** Even a small-average category is promoted to High if it ever spiked
+	 * past this in a single month. Placeholder value, per Ray, 2026-09-22. */
+	private static final double omittedSpikeMax=300;
 	/** Deviation pane only: category prefixes dropped when exclusions are on.
 	 * A prefix like "Auto & Transport" drops that category and all its
 	 * sub-categories. */
