@@ -42,10 +42,12 @@ public final class AmazonTransactionReview {
         Result result = create(simplifi, amazon, output);
         System.out.printf(Locale.US, "Wrote %d Amazon charges to %s%n",
                 result.rows(), output.toAbsolutePath());
+        System.out.printf(Locale.US, "Wrote %d action items to %s%n",
+                result.actionItems(), actionOutput(output).toAbsolutePath());
         result.matchCounts().forEach((status, count) ->
                 System.out.printf(Locale.US, "%-18s %4d%n", status + ":", count));
         System.out.printf(Locale.US, "Recommendations:    %4d%n", result.recommendations());
-        System.out.printf(Locale.US, "Mirror warnings:    %4d%n", result.mirrorWarnings());
+        System.out.printf(Locale.US, "Mirror rows dropped:%4d%n", result.mirrorDuplicatesDropped());
     }
 
     static Result create(Path simplifi, Path amazon, Path output) {
@@ -57,27 +59,23 @@ public final class AmazonTransactionReview {
                     .add(candidate);
         }
 
-        List<Charge> charges = readCharges(simplifiTable);
-        Set<String> mirrorKeys = findMirrorKeys(charges);
-        List<ReviewRow> review = new ArrayList<>();
-        for (Charge charge : charges) {
-            review.add(review(charge,
-                    candidatesByAmount.getOrDefault(charge.cents(), List.of()),
-                    mirrorKeys.contains(charge.mirrorKey())));
-        }
+        MirrorResult mirrorResult = withoutMirroredDuplicates(readCharges(simplifiTable));
+        List<Charge> charges = mirrorResult.charges();
+        List<ReviewRow> review = review(charges, candidatesByAmount);
         review.sort(Comparator.comparing(ReviewRow::date).thenComparingInt(ReviewRow::sourceRow));
         validate(charges, review);
         write(output, review);
+        List<ReviewRow> actionItems = review.stream().filter(ReviewRow::actionable).toList();
+        write(actionOutput(output), actionItems);
 
         Map<String, Integer> matchCounts = new TreeMap<>();
         int recommendations = 0;
-        int mirrorWarnings = 0;
         for (ReviewRow row : review) {
             matchCounts.merge(row.matchStatus(), 1, Integer::sum);
             if (!row.recommendedCategory().isBlank()) recommendations++;
-            if (row.possibleMirrorDuplicate()) mirrorWarnings++;
         }
-        return new Result(review.size(), matchCounts, recommendations, mirrorWarnings);
+        return new Result(review.size(), actionItems.size(), matchCounts, recommendations,
+                mirrorResult.dropped());
     }
 
     private static List<Charge> readCharges(Table table) {
@@ -99,17 +97,47 @@ public final class AmazonTransactionReview {
         return charges;
     }
 
-    private static Set<String> findMirrorKeys(List<Charge> charges) {
-        Map<String, Set<String>> accountsByKey = new HashMap<>();
+    private static MirrorResult withoutMirroredDuplicates(List<Charge> charges) {
+        Map<String, List<Charge>> primaryByKey = new HashMap<>();
         for (Charge charge : charges) {
-            accountsByKey.computeIfAbsent(charge.mirrorKey(), ignored -> new HashSet<>())
-                    .add(charge.account());
+            if (isPrimaryMirrorAccount(charge.account())) {
+                primaryByKey.computeIfAbsent(charge.mirrorKey(), ignored -> new ArrayList<>())
+                        .add(charge);
+            }
         }
-        Set<String> mirrors = new HashSet<>();
-        accountsByKey.forEach((key, accounts) -> {
-            if (accounts.size() > 1) mirrors.add(key);
-        });
-        return mirrors;
+        List<Charge> kept = new ArrayList<>();
+        int dropped = 0;
+        for (Charge charge : charges) {
+            List<Charge> twins = primaryByKey.get(charge.mirrorKey());
+            if (isMirrorAliasAccount(charge.account()) && twins != null && !twins.isEmpty()) {
+                Charge primary = twins.remove(twins.size() - 1);
+                if (!charge.category().equalsIgnoreCase(primary.category())) {
+                    System.out.printf(Locale.US,
+                            "Warning: mirrored Amazon copies have different categories: "
+                                    + "%s | %s | %s | dropping %s [%s], keeping %s [%s]%n",
+                            charge.date(), charge.payee(), money(charge.cents()),
+                            charge.account(), charge.category(), primary.account(),
+                            primary.category());
+                }
+                dropped++;
+            } else {
+                kept.add(charge);
+            }
+        }
+        return new MirrorResult(List.copyOf(kept), dropped);
+    }
+
+    private static boolean isMirrorAliasAccount(String account) {
+        return normalizedAccount(account).equals("americanexpresstraditionalgold");
+    }
+
+    private static boolean isPrimaryMirrorAccount(String account) {
+        return normalizedAccount(account).equals("traditionalgoldcard");
+    }
+
+    private static String normalizedAccount(String account) {
+        return account.toLowerCase(Locale.ROOT).replace("(r)", "")
+                .replaceAll("[^a-z0-9]", "");
     }
 
     private static List<Candidate> readCandidates(Path amazon) {
@@ -186,38 +214,95 @@ public final class AmazonTransactionReview {
         return candidates;
     }
 
-    private static ReviewRow review(Charge charge, List<Candidate> candidates,
-                                    boolean possibleMirrorDuplicate) {
-        List<NearCandidate> withinSeven = new ArrayList<>();
-        for (Candidate candidate : candidates) {
-            int difference = candidate.daysFrom(charge.date());
-            if (difference <= 7) withinSeven.add(new NearCandidate(candidate, difference));
-        }
-        int minimum = withinSeven.stream().mapToInt(NearCandidate::days).min().orElse(-1);
-        List<Candidate> nearest = withinSeven.stream()
-                .filter(candidate -> candidate.days() == minimum)
-                .map(NearCandidate::candidate)
-                .toList();
-
-        if (nearest.isEmpty()) {
-            return ReviewRow.unmatched(charge, possibleMirrorDuplicate, withinSeven.size());
-        }
-        if (nearest.size() > 1) {
-            return ReviewRow.ambiguous(charge, possibleMirrorDuplicate,
-                    withinSeven.size(), minimum, nearest);
+    private static List<ReviewRow> review(List<Charge> charges,
+                                           Map<Long, List<Candidate>> candidatesByAmount) {
+        List<ChargeOptions> options = new ArrayList<>();
+        for (Charge charge : charges) {
+            List<NearCandidate> withinSeven = new ArrayList<>();
+            for (Candidate candidate : candidatesByAmount.getOrDefault(charge.cents(), List.of())) {
+                int difference = candidate.daysFrom(charge.date());
+                if (difference <= 7) withinSeven.add(new NearCandidate(candidate, difference));
+            }
+            int minimum = withinSeven.stream().mapToInt(NearCandidate::days).min().orElse(-1);
+            List<Candidate> nearest = withinSeven.stream()
+                    .filter(candidate -> candidate.days() == minimum)
+                    .map(NearCandidate::candidate)
+                    .toList();
+            options.add(new ChargeOptions(charge, List.copyOf(withinSeven), minimum, nearest));
         }
 
-        Candidate candidate = nearest.get(0);
-        Recommendation recommendation = recommend(candidate);
-        String assessment = recommendation.category().isBlank() ? "Needs review"
+        List<MatchEdge> edges = new ArrayList<>();
+        for (ChargeOptions option : options) {
+            if (option.nearest().size() != 1) continue;
+            for (NearCandidate near : option.withinSeven()) {
+                edges.add(new MatchEdge(option.charge(), near.candidate(), near.days()));
+            }
+        }
+        edges.sort(Comparator.comparingInt(MatchEdge::days)
+                .thenComparingInt(edge -> edge.charge().sourceRow())
+                .thenComparing(edge -> edge.candidate().kind())
+                .thenComparing(edge -> edge.candidate().orderId()));
+
+        Map<Integer, MatchEdge> assigned = new HashMap<>();
+        Set<Candidate> used = new HashSet<>();
+        for (MatchEdge edge : edges) {
+            if (assigned.containsKey(edge.charge().sourceRow()) || used.contains(edge.candidate())) {
+                continue;
+            }
+            assigned.put(edge.charge().sourceRow(), edge);
+            used.add(edge.candidate());
+        }
+
+        List<ReviewRow> rows = new ArrayList<>();
+        for (ChargeOptions option : options) {
+            Charge charge = option.charge();
+            if (option.nearest().isEmpty()) {
+                rows.add(ReviewRow.unmatched(charge, option.withinSeven().size(),
+                        "No retail or digital order with the same amount within 7 days."));
+            } else if (option.nearest().size() > 1) {
+                Recommendation recommendation = recommend(option.nearest());
+                rows.add(ReviewRow.ambiguous(charge, option.withinSeven().size(),
+                        option.minimum(), option.nearest(), recommendation,
+                        assessment(charge, recommendation)));
+            } else {
+                MatchEdge edge = assigned.get(charge.sourceRow());
+                if (edge == null) {
+                    rows.add(ReviewRow.unmatched(charge, option.withinSeven().size(),
+                            "Matching Amazon order was already assigned to another Simplifi charge."));
+                    continue;
+                }
+                Recommendation recommendation = recommend(edge.candidate());
+                String confidence = edge.days() <= 1 ? "High"
+                        : edge.days() <= 3 ? "Medium" : "Low";
+                rows.add(ReviewRow.matched(charge, option.withinSeven().size(), edge.days(),
+                        edge.candidate(), confidence, recommendation,
+                        assessment(charge, recommendation)));
+            }
+        }
+        return rows;
+    }
+
+    private static String assessment(Charge charge, Recommendation recommendation) {
+        return recommendation.category().isBlank() ? "Needs review"
                 : recommendation.category().equals(charge.category())
                         ? "Correct" : "Review category";
-        String matchConfidence = minimum <= 1 ? "High" : minimum <= 3 ? "Medium" : "Low";
-        return ReviewRow.matched(charge, possibleMirrorDuplicate, withinSeven.size(),
-                minimum, candidate, matchConfidence, recommendation, assessment);
     }
 
     private static Recommendation recommend(Candidate candidate) {
+        String productText = String.join(" ", candidate.products()).toLowerCase(Locale.ROOT);
+        if (productText.contains("kindle unlimited")
+                || productText.contains("audible premium plus")) {
+            return new Recommendation("Shopping:Books", "High", "Known Amazon subscription");
+        }
+        if (productText.contains("britbox") || productText.contains("bbc select")
+                || productText.contains("acorn tv")
+                || productText.contains("prime video ultra")
+                || productText.contains("discovery+")) {
+            return new Recommendation("Entertainment", "High", "Known Amazon subscription");
+        }
+        if (productText.contains("prime membership fee")) {
+            return new Recommendation("Prime", "High", "Known Amazon subscription");
+        }
         Set<String> categories = new LinkedHashSet<>();
         boolean medium = false;
         for (String department : candidate.departments()) {
@@ -252,12 +337,26 @@ public final class AmazonTransactionReview {
         if (categories.size() > 1) {
             return new Recommendation("", "Low", "Items map to multiple categories");
         }
-        String productText = String.join(" ", candidate.products());
         if (candidate.kind().equals("Digital")
                 && productText.matches("(?is).*\\b(kindle|e-?book)\\b.*")) {
             return new Recommendation("Shopping:Books", "Medium", "Digital product name");
         }
         return new Recommendation("", "Low", "Department needs review");
+    }
+
+    private static Recommendation recommend(List<Candidate> candidates) {
+        List<Recommendation> recommendations = candidates.stream()
+                .map(AmazonTransactionReview::recommend).toList();
+        Set<String> categories = new LinkedHashSet<>();
+        for (Recommendation recommendation : recommendations) {
+            if (recommendation.category().isBlank()) return noRecommendation;
+            categories.add(recommendation.category());
+        }
+        if (categories.size() == 1) {
+            return new Recommendation(categories.iterator().next(), "Medium",
+                    "All equally near orders map to the same category");
+        }
+        return noRecommendation;
     }
 
     private static void validate(List<Charge> charges, List<ReviewRow> review) {
@@ -284,6 +383,12 @@ public final class AmazonTransactionReview {
         } catch (IOException e) {
             throw new UncheckedIOException("Could not write " + output, e);
         }
+    }
+
+    private static Path actionOutput(Path output) {
+        Path parent = output.getParent();
+        return parent == null ? Path.of("amazon-action-items.csv")
+                : parent.resolve("amazon-action-items.csv");
     }
 
     private static void appendCsvRow(StringBuilder csv, List<String> cells) {
@@ -457,6 +562,13 @@ public final class AmazonTransactionReview {
 
     record NearCandidate(Candidate candidate, int days) { }
 
+    record ChargeOptions(Charge charge, List<NearCandidate> withinSeven,
+                         int minimum, List<Candidate> nearest) { }
+
+    record MatchEdge(Charge charge, Candidate candidate, int days) { }
+
+    record MirrorResult(List<Charge> charges, int dropped) { }
+
     record Recommendation(String category, String confidence, String basis) { }
 
     record ReviewRow(int sourceRow, LocalDate date, String account, String payee,
@@ -468,23 +580,24 @@ public final class AmazonTransactionReview {
                      String products, String recommendedCategory,
                      String recommendationConfidence, String assessment, String reason) {
 
-        static ReviewRow unmatched(Charge charge, boolean mirror, int candidateCount) {
-            return base(charge, mirror, "Unmatched", "None", "", candidateCount,
-                    List.of(), "", "", "Low", "Needs review",
-                    "No retail or digital order with the same amount within 7 days.");
+        static ReviewRow unmatched(Charge charge, int candidateCount, String reason) {
+            return base(charge, false, "Unmatched", "None", "", candidateCount,
+                    List.of(), "", "", "Low", "Needs review", reason);
         }
 
-        static ReviewRow ambiguous(Charge charge, boolean mirror, int candidateCount,
-                                   int days, List<Candidate> candidates) {
-            return base(charge, mirror, "Ambiguous", "Low", Integer.toString(days),
-                    candidateCount, candidates, money(charge.cents()), "", "Low", "Needs review",
+        static ReviewRow ambiguous(Charge charge, int candidateCount,
+                                   int days, List<Candidate> candidates,
+                                   Recommendation recommendation, String assessment) {
+            return base(charge, false, "Ambiguous", "Low", Integer.toString(days),
+                    candidateCount, candidates, money(charge.cents()),
+                    recommendation.category(), recommendation.confidence(), assessment,
                     candidates.size() + " equally near orders share this amount.");
         }
 
-        static ReviewRow matched(Charge charge, boolean mirror, int candidateCount,
+        static ReviewRow matched(Charge charge, int candidateCount,
                                  int days, Candidate candidate, String matchConfidence,
                                  Recommendation recommendation, String assessment) {
-            return base(charge, mirror, "Matched " + candidate.kind().toLowerCase(Locale.ROOT),
+            return base(charge, false, "Matched " + candidate.kind().toLowerCase(Locale.ROOT),
                     matchConfidence, Integer.toString(days), candidateCount,
                     List.of(candidate), money(candidate.cents()), recommendation.category(),
                     recommendation.confidence(), assessment,
@@ -525,10 +638,15 @@ public final class AmazonTransactionReview {
                     orderDates, shipDates, amazonAmount, itemCount, departments, products,
                     recommendedCategory, recommendationConfidence, assessment, reason);
         }
+
+        boolean actionable() {
+            return matchStatus.equals("Unmatched") || matchStatus.equals("Ambiguous")
+                    || assessment.equals("Review category");
+        }
     }
 
-    record Result(int rows, Map<String, Integer> matchCounts,
-                  int recommendations, int mirrorWarnings) { }
+    record Result(int rows, int actionItems, Map<String, Integer> matchCounts,
+                  int recommendations, int mirrorDuplicatesDropped) { }
 
     private static final java.util.regex.Pattern amazonPayee =
             java.util.regex.Pattern.compile("amazon|amzn", java.util.regex.Pattern.CASE_INSENSITIVE);
@@ -548,6 +666,8 @@ public final class AmazonTransactionReview {
             "Amazon Order Date", "Amazon Ship Date", "Amazon Amount",
             "Amazon Item Count", "Amazon Department", "Amazon Product",
             "Recommended Category", "Recommendation Confidence", "Assessment", "Reason");
+    private static final Recommendation noRecommendation =
+            new Recommendation("", "Low", "Candidate categories need review");
 
     private AmazonTransactionReview() { }
 }
