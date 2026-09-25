@@ -61,7 +61,8 @@ import javax.swing.table.DefaultTableModel;
 /** Reads a Quicken Simplifi transaction CSV export and plots total spending by
  * category as a horizontal bar chart. No external dependencies (pure Swing).
  *
- * Run: java --enable-preview -p . -m money/money.SpendingPlot [file.csv] or
+ * Run: java --enable-preview -p . -m money/money.SpendingPlot
+ * [--main-categories] [file.csv] or
  * from Eclipse just run this class; if no file is given a chooser opens. */
 public final class SpendingPlot {
 	/** One spending category and its total (a positive dollar amount). */
@@ -70,6 +71,7 @@ public final class SpendingPlot {
 	record CategoryDeviation(String category,double average,double standardDeviation,double maxDeviation,double maxSpending,double percentage) {}
 	/** A single spending transaction (amount is a positive outflow). */
 	record Transaction(LocalDate date,String category,String payee,String note,double amount) {}
+	record Options(Path csv,boolean mainCategoriesOnly) {}
 	/** A repeated fixed-amount payment that deserves recurring-charge
 	 * review. */
 	record RecurringCandidate(String payee,double amount,String cadence,int occurrences,LocalDate firstDate,LocalDate lastDate,double annualizedAmount,
@@ -251,6 +253,15 @@ public final class SpendingPlot {
 			if(startDate!=null&&t.date()!=null&&t.date().isBefore(startDate)) continue;
 			if(t.date()!=null&&YearMonth.from(t.date()).equals(YearMonth.now())) continue;
 			out.add(new Transaction(t.date(),t.category(),t.payee(),t.note(),-t.amount()));
+		}
+		return out;
+	}
+	static List<Transaction> mainCategories(List<Transaction> transactions) {
+		List<Transaction> out=new ArrayList<>(transactions.size());
+		for(Transaction t:transactions) {
+			int separator=t.category().indexOf(':');
+			String category=separator<0?t.category():t.category().substring(0,separator).strip();
+			out.add(new Transaction(t.date(),category,t.payee(),t.note(),t.amount()));
 		}
 		return out;
 	}
@@ -1227,11 +1238,13 @@ public final class SpendingPlot {
 	}
 	// ---- entry point ------------------------------------------------------
 	public static void main(String[] args) {
-		Path csv=(args.length>0)?Path.of(args[0]):chooseOrDefault();
+		Options options=parseOptions(args);
+		Path csv=options.csv();
 		if(csv==null) {
 			System.out.println("No file selected.");
 			return;
 		}
+		System.out.println("Category mode: "+(options.mainCategoriesOnly()?"main categories only":"categories and subcategories"));
 		System.out.println("Excluded from all spending charts: "+String.join(", ",new TreeSet<>(excludedCategories)));
 		System.out.println("CSV rows marked Exclusion=yes are also excluded.");
 		if(useDeviationExclusions)
@@ -1250,7 +1263,8 @@ public final class SpendingPlot {
 			System.out.println("No rows found in "+csv);
 			return;
 		}
-		List<Transaction> spending=toSpendingTransactions(all);
+		List<Transaction> detailedSpending=toSpendingTransactions(all);
+		List<Transaction> spending=options.mainCategoriesOnly()?mainCategories(detailedSpending):detailedSpending;
 		List<CategoryTotal> totals=categoryTotals(spending);
 		List<CategoryDeviation> deviations=categoryMonthlyDeviations(spending);
 		List<RecurringCandidate> recurring=findRecurringCandidates(spending);
@@ -1265,6 +1279,22 @@ public final class SpendingPlot {
 		writeStandardDeviations(deviations,standardDeviationsOutput);
 		System.out.printf(Locale.US,"Wrote %d standard deviations to %s%n",deviations.size(),standardDeviationsOutput.toAbsolutePath());
 		printUncategorized(all);
+	}
+	private static Options parseOptions(String[] args) {
+		Path csv=null;
+		boolean mainCategoriesOnly=false;
+		for(String arg:args) {
+			if(arg.equals("--main-categories")) {
+				mainCategoriesOnly=true;
+			} else if(arg.startsWith("--")) {
+				throw new IllegalArgumentException("Unknown option: "+arg+"\nUsage: SpendingPlot [--main-categories] [file.csv]");
+			} else if(csv==null) {
+				csv=Path.of(arg);
+			} else {
+				throw new IllegalArgumentException("Usage: SpendingPlot [--main-categories] [file.csv]");
+			}
+		}
+		return new Options(csv==null?chooseOrDefault():csv,mainCategoriesOnly);
 	}
 	// ---- fields -----------------------------------------------------------
 	/** Min rows an account needs before it can be judged a duplicate link. */
