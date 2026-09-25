@@ -617,6 +617,11 @@ public final class SpendingPlot {
 					why="average $"+String.format(Locale.US,"%.2f",d.average())+" below $"+omittedMaxAverage+" floor";
 				}
 			}
+			else if(d.percentage()<deviationMinPercentage) {
+				bucket="omitted";
+				why="relative std dev "+String.format(Locale.US,"%.1f",d.percentage()*100)+"% below "
+						+String.format(Locale.US,"%.0f",deviationMinPercentage*100)+"% floor";
+			}
 			else if(d.standardDeviation()<deviationMinStddev&&d.maxDeviation()<highDeviationMinMax) {
 				// Genuinely flat/steady -- decided before any magnitude check gets
 				// a chance to promote a big-but-steady category to High.
@@ -1233,7 +1238,8 @@ public final class SpendingPlot {
 			System.out.println("Excluded only from deviation charts: "+String.join(", ",new TreeSet<>(deviationExcluded)));
 		else
 			System.out.println("Deviation category exclusions are disabled.");
-		System.out.printf(Locale.US,"Omitted: category average below $%,.0f.%n",omittedMaxAverage);
+		System.out.printf(Locale.US,"Omitted: category average below $%,.0f or relative std dev below %.0f%%.%n",omittedMaxAverage,
+				deviationMinPercentage*100);
 		System.out.printf(Locale.US,"Low (steady): std dev below $%,.0f and max deviation below $%,.0f.%n",deviationMinStddev,highDeviationMinMax);
 		System.out.printf(Locale.US,"High deviation means at least $%,.0f std dev, $%,.0f max deviation, or %.0f%% of average.%n",
 				highDeviationMinStddev,highDeviationMinMax,highDeviationMinPercentage*100);
