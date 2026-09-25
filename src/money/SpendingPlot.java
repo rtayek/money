@@ -62,7 +62,7 @@ import javax.swing.table.DefaultTableModel;
  * category as a horizontal bar chart. No external dependencies (pure Swing).
  *
  * Run: java --enable-preview -p . -m money/money.SpendingPlot
- * [--main-categories] [file.csv] or
+ * [--main-categories] [--include-partial-month] [file.csv] or
  * from Eclipse just run this class; if no file is given a chooser opens. */
 public final class SpendingPlot {
 	/** One spending category and its total (a positive dollar amount). */
@@ -71,7 +71,7 @@ public final class SpendingPlot {
 	record CategoryDeviation(String category,double average,double standardDeviation,double maxDeviation,double maxSpending,double percentage) {}
 	/** A single spending transaction (amount is a positive outflow). */
 	record Transaction(LocalDate date,String category,String payee,String note,double amount) {}
-	record Options(Path csv,boolean mainCategoriesOnly) {}
+	record Options(Path csv,boolean mainCategoriesOnly,boolean includePartialMonth) {}
 	/** A repeated fixed-amount payment that deserves recurring-charge
 	 * review. */
 	record RecurringCandidate(String payee,double amount,String cadence,int occurrences,LocalDate firstDate,LocalDate lastDate,double annualizedAmount,
@@ -88,13 +88,10 @@ public final class SpendingPlot {
 		return Files.exists(defaultCsv)?defaultCsv:chooseFile();
 	}
 	// ---- CSV loading ------------------------------------------------------
-	/** Parses every row of the CSV, dropping only what Simplifi itself flagged
-	 * as excluded (account transfers, card payments, etc. via the "Exclusion"
-	 * column). Every month and category is kept, and the amount keeps its
-	 * original CSV sign (negative = money out). This is the single read of the
-	 * file; {@link #toSpendingTransactions}, {@link #findUncategorizedChecks},
-	 * and {@link #printUncategorized} each filter this list for their own
-	 * needs. */
+	/** Parses every row of the CSV, removes charge/reversal pairs and mirrored
+	 * account duplicates, then drops what Simplifi flagged as excluded. Every
+	 * month and category is kept, and the amount keeps its original CSV sign
+	 * (negative = money out). */
 	static List<Transaction> loadAllTransactions(Path csv) {
 		List<String> lines;
 		try {
@@ -118,9 +115,7 @@ public final class SpendingPlot {
 			if(raw.isBlank()) continue;
 			List<String> fields=parseCsvLine(raw);
 			if(amtCol>=fields.size()||catCol>=fields.size()) continue;
-			// Reject anything Simplifi has flagged as excluded (transfers,
-			// etc.).
-			if(exclCol>=0&&exclCol<fields.size()&&fields.get(exclCol).strip().equalsIgnoreCase("yes")) continue;
+			boolean excluded=exclCol>=0&&exclCol<fields.size()&&fields.get(exclCol).strip().equalsIgnoreCase("yes");
 			double amount=parseAmount(fields.get(amtCol));
 			String category=fields.get(catCol).strip();
 			if(category.isEmpty()) category="(Uncategorized)";
@@ -128,9 +123,55 @@ public final class SpendingPlot {
 			String payee=(payeeCol>=0&&payeeCol<fields.size())?fields.get(payeeCol).strip():"";
 			String note=(noteCol>=0&&noteCol<fields.size())?fields.get(noteCol).strip():"";
 			String account=(acctCol>=0&&acctCol<fields.size())?fields.get(acctCol).strip():"";
-			rows.add(new Row(account,new Transaction(date,category,payee,note,amount)));
+			rows.add(new Row(account,new Transaction(date,category,payee,note,amount),excluded));
 		}
-		return withoutMirroredDuplicates(rows);
+		List<Row> withoutReversals=withoutReversalPairs(rows);
+		List<Row> included=new ArrayList<>();
+		for(Row row:withoutReversals)
+			if(!row.excluded()) included.add(row);
+		return withoutMirroredDuplicates(included);
+	}
+	static List<Row> withoutReversalPairs(List<Row> rows) {
+		Map<String,List<Integer>> byAccountAndAmount=new LinkedHashMap<>();
+		for(int i=0;i<rows.size();i++) {
+			Row row=rows.get(i);
+			long cents=Math.abs(Math.round(row.txn().amount()*100));
+			String key=row.account().strip().toLowerCase(Locale.ROOT)+"|"+cents;
+			byAccountAndAmount.computeIfAbsent(key,_->new ArrayList<>()).add(i);
+		}
+		boolean[] removed=new boolean[rows.size()];
+		int pairs=0;
+		for(List<Integer> candidates:byAccountAndAmount.values()) {
+			for(int i:candidates) {
+				Transaction charge=rows.get(i).txn();
+				if(removed[i]||charge.amount()>=0||charge.date()==null) continue;
+				int best=-1;
+				long bestDays=Long.MAX_VALUE;
+				for(int j:candidates) {
+					Transaction credit=rows.get(j).txn();
+					if(removed[j]||credit.amount()<=0||credit.date()==null) continue;
+					long days=Math.abs(ChronoUnit.DAYS.between(charge.date(),credit.date()));
+					if(days>reversalMaxDays||(!looksLikeReversal(charge.payee())&&!looksLikeReversal(credit.payee()))) continue;
+					if(days<bestDays) {
+						best=j;
+						bestDays=days;
+					}
+				}
+				if(best>=0) {
+					removed[i]=true;
+					removed[best]=true;
+					pairs++;
+				}
+			}
+		}
+		if(pairs>0) System.out.printf("Ignored %d charge/reversal pair(s).%n",pairs);
+		List<Row> out=new ArrayList<>(rows.size()-pairs*2);
+		for(int i=0;i<rows.size();i++)
+			if(!removed[i]) out.add(rows.get(i));
+		return out;
+	}
+	private static boolean looksLikeReversal(String payee) {
+		return payee!=null&&reversalPayee.matcher(payee).find();
 	}
 	/** Drops exact duplicates created when one real account is linked into
 	 * Simplifi twice (e.g. "Traditional Gold Card" and "American Express
@@ -235,7 +276,7 @@ public final class SpendingPlot {
 	}
 	/** A parsed row plus its source account, used only for duplicate
 	 * detection. */
-	record Row(String account,Transaction txn) {
+	record Row(String account,Transaction txn,boolean excluded) {
 		String key() {
 			return txn.date()+"|"+txn.payee()+"|"+String.format(Locale.US,"%.2f",txn.amount());
 		}
@@ -245,16 +286,44 @@ public final class SpendingPlot {
 	 * generic income/transfer categories dropped, anything before
 	 * {@link #startDate} dropped, and the current (still-accumulating) month
 	 * dropped since it's only partial. */
-	static List<Transaction> toSpendingTransactions(List<Transaction> all) {
+	static List<Transaction> toSpendingTransactions(List<Transaction> all,boolean includePartialMonth) {
 		List<Transaction> out=new ArrayList<>();
 		for(Transaction t:all) {
 			if(t.amount()>=0) continue; // only outflows count as spending
 			if(excludedCategories.contains(t.category())) continue;
-			if(startDate!=null&&t.date()!=null&&t.date().isBefore(startDate)) continue;
-			if(t.date()!=null&&YearMonth.from(t.date()).equals(YearMonth.now())) continue;
+			if(!inReportPeriod(t,includePartialMonth)) continue;
 			out.add(new Transaction(t.date(),t.category(),t.payee(),t.note(),-t.amount()));
 		}
 		return out;
+	}
+	static List<Transaction> cashFlowTransactions(List<Transaction> all,List<Transaction> spending,boolean includePartialMonth) {
+		List<Transaction> out=new ArrayList<>();
+		Map<YearMonth,Double> incomeByMonth=new LinkedHashMap<>();
+		Map<YearMonth,Double> spendingByMonth=new LinkedHashMap<>();
+		for(Transaction t:all) {
+			if(t.amount()<=0||!isIncomeCategory(t.category())||!inReportPeriod(t,includePartialMonth)||t.date()==null) continue;
+			out.add(new Transaction(t.date(),"Income",t.payee(),t.note(),t.amount()));
+			incomeByMonth.merge(YearMonth.from(t.date()),t.amount(),Double::sum);
+		}
+		for(Transaction t:spending) {
+			if(t.date()==null) continue;
+			out.add(new Transaction(t.date(),"Spending",t.payee(),t.note(),t.amount()));
+			spendingByMonth.merge(YearMonth.from(t.date()),t.amount(),Double::sum);
+		}
+		TreeSet<YearMonth> months=new TreeSet<>(incomeByMonth.keySet());
+		months.addAll(spendingByMonth.keySet());
+		for(YearMonth month:months) {
+			double difference=incomeByMonth.getOrDefault(month,0.0)-spendingByMonth.getOrDefault(month,0.0);
+			out.add(new Transaction(month.atDay(1),"Difference","Income minus spending","",difference));
+		}
+		return out;
+	}
+	private static boolean isIncomeCategory(String category) {
+		return category.equals("Personal Income")||category.startsWith("Personal Income:");
+	}
+	private static boolean inReportPeriod(Transaction t,boolean includePartialMonth) {
+		if(startDate!=null&&t.date()!=null&&t.date().isBefore(startDate)) return false;
+		return includePartialMonth||t.date()==null||!YearMonth.from(t.date()).equals(YearMonth.now());
 	}
 	static List<Transaction> mainCategories(List<Transaction> transactions) {
 		List<Transaction> out=new ArrayList<>(transactions.size());
@@ -592,7 +661,7 @@ public final class SpendingPlot {
 		int r=fc.showOpenDialog(null);
 		return (r==JFileChooser.APPROVE_OPTION)?fc.getSelectedFile().toPath():null;
 	}
-	private static void showCharts(String title,List<Transaction> transactions,List<CategoryTotal> totals) {
+	private static void showCharts(String title,List<Transaction> transactions,List<CategoryTotal> totals,List<Transaction> cashFlow) {
 		JFrame frame=new JFrame("Spending - "+title);
 		frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
 		// Categories the user right-clicks away are collected here (across all
@@ -603,6 +672,8 @@ public final class SpendingPlot {
 		JTabbedPane tabs=new JTabbedPane();
 		tabs.addTab("By Category",new JScrollPane(new BarChartPanel(totals)));
 		tabs.addTab("Over Time",track(new TimeSeriesPanel(transactions,totals),removed,linePanels));
+		tabs.addTab("Income & Spending",new TimeSeriesPanel(cashFlow,
+				List.of(new CategoryTotal("Income",0),new CategoryTotal("Spending",0),new CategoryTotal("Difference",0))));
 		List<CategoryDeviation> deviations=categoryMonthlyDeviations(transactions);
 		// Two deviation panes: after dropping excluded prefixes and categories
 		// below either noise floor, classify each survivor independently.
@@ -1026,11 +1097,11 @@ public final class SpendingPlot {
 				g.drawString("No dated transactions to plot.",left,top+20);
 				return;
 			}
-			// Fit the y axis to the data with a small border. Spending charts keep
-			// zero as their baseline; deviation charts pad both ends.
+			// Fit the y axis to the data with a small border. Positive-only charts
+			// keep zero as their baseline; charts with negative values pad both ends.
 			double dataRange=Math.max(1,max-min);
 			double padding=dataRange*0.05;
-			double axisMin=deviation?min-padding:0;
+			double axisMin=(deviation||min<0)?min-padding:0;
 			double axisMax=max+padding;
 			if(axisMax<=axisMin) axisMax=axisMin+1;
 			double step=niceStep(axisMax-axisMin);
@@ -1247,6 +1318,7 @@ public final class SpendingPlot {
 		System.out.println("Category mode: "+(options.mainCategoriesOnly()?"main categories only":"categories and subcategories"));
 		System.out.println("Excluded from all spending charts: "+String.join(", ",new TreeSet<>(excludedCategories)));
 		System.out.println("CSV rows marked Exclusion=yes are also excluded.");
+		System.out.println("Final partial month: "+(options.includePartialMonth()?"included":"excluded"));
 		if(useDeviationExclusions)
 			System.out.println("Excluded only from deviation charts: "+String.join(", ",new TreeSet<>(deviationExcluded)));
 		else
@@ -1263,13 +1335,14 @@ public final class SpendingPlot {
 			System.out.println("No rows found in "+csv);
 			return;
 		}
-		List<Transaction> detailedSpending=toSpendingTransactions(all);
+		List<Transaction> detailedSpending=toSpendingTransactions(all,options.includePartialMonth());
 		List<Transaction> spending=options.mainCategoriesOnly()?mainCategories(detailedSpending):detailedSpending;
+		List<Transaction> cashFlow=cashFlowTransactions(all,detailedSpending,options.includePartialMonth());
 		List<CategoryTotal> totals=categoryTotals(spending);
 		List<CategoryDeviation> deviations=categoryMonthlyDeviations(spending);
 		List<RecurringCandidate> recurring=findRecurringCandidates(spending);
 		totals.forEach(ct->System.out.printf(Locale.US,"%-30s %,12.2f%n",ct.category(),ct.total()));
-		SwingUtilities.invokeLater(()->showCharts(csv.getFileName().toString(),spending,totals));
+		SwingUtilities.invokeLater(()->showCharts(csv.getFileName().toString(),spending,totals,cashFlow));
 		List<CheckEntry> checks=findUncategorizedChecks(all);
 		printUncategorizedChecks(checks);
 		writeUncategorizedChecks(checks,uncategorizedChecksOutput);
@@ -1282,19 +1355,22 @@ public final class SpendingPlot {
 	}
 	private static Options parseOptions(String[] args) {
 		Path csv=null;
-		boolean mainCategoriesOnly=false;
+		boolean mainCategoriesOnly=true;
+		boolean includePartialMonth=true;
 		for(String arg:args) {
 			if(arg.equals("--main-categories")) {
 				mainCategoriesOnly=true;
+			} else if(arg.equals("--include-partial-month")) {
+				includePartialMonth=true;
 			} else if(arg.startsWith("--")) {
-				throw new IllegalArgumentException("Unknown option: "+arg+"\nUsage: SpendingPlot [--main-categories] [file.csv]");
+				throw new IllegalArgumentException("Unknown option: "+arg+"\nUsage: SpendingPlot [--main-categories] [--include-partial-month] [file.csv]");
 			} else if(csv==null) {
 				csv=Path.of(arg);
 			} else {
-				throw new IllegalArgumentException("Usage: SpendingPlot [--main-categories] [file.csv]");
+				throw new IllegalArgumentException("Usage: SpendingPlot [--main-categories] [--include-partial-month] [file.csv]");
 			}
 		}
-		return new Options(csv==null?chooseOrDefault():csv,mainCategoriesOnly);
+		return new Options(csv==null?chooseOrDefault():csv,mainCategoriesOnly,includePartialMonth);
 	}
 	// ---- fields -----------------------------------------------------------
 	/** Min rows an account needs before it can be judged a duplicate link. */
@@ -1302,6 +1378,8 @@ public final class SpendingPlot {
 	/** Fraction of an account's rows that must be exact twins of one other
 	 * account to call it a mirror. */
 	private static final double mirrorFraction=0.90;
+	private static final int reversalMaxDays=3;
+	private static final Pattern reversalPayee=Pattern.compile("(?i)\\b(adj|adjustment|adjusted|reversal|reversed|refund|credit)\\b");
 	/** Max distinct category lines drawn on the time chart; the rest =
 	 * "Other". */
 	private static final int maxSeries=100;
