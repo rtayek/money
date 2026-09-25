@@ -689,7 +689,7 @@ public final class SpendingPlot {
 		tabs.addTab("Over Time",track(new TimeSeriesPanel(transactions,totals),removed,linePanels));
 		tabs.addTab("Income & Spending",new TimeSeriesPanel(cashFlow,
 				List.of(new CategoryTotal("Income",0),new CategoryTotal("Spending",0),new CategoryTotal("Difference",0)),false,
-				SpendingPlot::cashFlowMonth));
+				SpendingPlot::cashFlowMonth,true));
 		List<CategoryDeviation> deviations=categoryMonthlyDeviations(transactions);
 		// Two deviation panes: after dropping excluded prefixes and categories
 		// below either noise floor, classify each survivor independently.
@@ -924,12 +924,13 @@ public final class SpendingPlot {
 			this(txns,totals,false);
 		}
 		TimeSeriesPanel(List<Transaction> txns,List<CategoryTotal> totals,boolean deviation) {
-			this(txns,totals,deviation,t->YearMonth.from(t.date()));
+			this(txns,totals,deviation,t->YearMonth.from(t.date()),false);
 		}
 		TimeSeriesPanel(List<Transaction> txns,List<CategoryTotal> totals,boolean deviation,
-				java.util.function.Function<Transaction,YearMonth> monthOf) {
+				java.util.function.Function<Transaction,YearMonth> monthOf,boolean regressionLines) {
 			this.deviation=deviation;
 			this.monthOf=monthOf;
+			this.regressionLines=regressionLines;
 			// Which categories get their own line; everything else -> "Other".
 			List<String> top=new ArrayList<>();
 			for(int i=0;i<totals.size()&&i<maxSeries;i++) {
@@ -1031,13 +1032,41 @@ public final class SpendingPlot {
 		 * series. */
 		private void recomputeRange() {
 			double hi=0,lo=0;
-			for(double[] arr:values.values())
+			for(Map.Entry<String,double[]> entry:values.entrySet()) {
+				double[] arr=entry.getValue();
 				for(double v:arr) {
 					hi=Math.max(hi,v);
 					lo=Math.min(lo,v);
 				}
+				if(hasRegression(entry.getKey())) {
+					double[] trend=regressionEndpoints(arr);
+					if(trend!=null) {
+						hi=Math.max(hi,Math.max(trend[0],trend[1]));
+						lo=Math.min(lo,Math.min(trend[0],trend[1]));
+					}
+				}
+			}
 			this.max=(hi==0)?1:hi;
 			this.min=lo;
+		}
+		private boolean hasRegression(String seriesName) {
+			return regressionLines&&!seriesName.equals("Income");
+		}
+		private static double[] regressionEndpoints(double[] values) {
+			if(values.length<2) return null;
+			double xMean=(values.length-1)/2.0;
+			double yMean=0;
+			for(double value:values)
+				yMean+=value;
+			yMean/=values.length;
+			double numerator=0,denominator=0;
+			for(int i=0;i<values.length;i++) {
+				double x=i-xMean;
+				numerator+=x*(values[i]-yMean);
+				denominator+=x*x;
+			}
+			double slope=numerator/denominator;
+			return new double[] {yMean-slope*xMean,yMean+slope*(values.length-1-xMean)};
 		}
 		/** Selects the plotted point nearest the click and lists its
 		 * transactions. */
@@ -1177,6 +1206,14 @@ public final class SpendingPlot {
 					prevX=x;
 					prevY=y;
 				}
+				if(hasRegression(series.get(s))) {
+					double[] trend=regressionEndpoints(arr);
+					if(trend!=null) {
+						g.setStroke(new BasicStroke(sel?3f:2f,BasicStroke.CAP_BUTT,BasicStroke.JOIN_MITER,10f,new float[] {9f,7f},0f));
+						g.drawLine(xAt.applyAsInt(0),(int)yAt.applyAsDouble(trend[0]),xAt.applyAsInt(n-1),
+								(int)yAt.applyAsDouble(trend[1]));
+					}
+				}
 			}
 			// ring the selected point
 			if(selSeries>=0&&selMonth>=0) {
@@ -1221,6 +1258,7 @@ public final class SpendingPlot {
 													// totals
 		private final boolean deviation; // plot value - mean instead of value
 		private final java.util.function.Function<Transaction,YearMonth> monthOf;
+		private final boolean regressionLines;
 		private double max,min; // data range across all series
 		private final NumberFormat money=NumberFormat.getCurrencyInstance(Locale.US);
 		private final DateTimeFormatter xFmt=DateTimeFormatter.ofPattern("MMM ''yy",Locale.US);
