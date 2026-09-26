@@ -62,8 +62,7 @@ import javax.swing.table.DefaultTableModel;
  * category as a horizontal bar chart. No external dependencies (pure Swing).
  *
  * Run: java --enable-preview -p . -m money/money.SpendingPlot
- * [--main-categories] [--include-partial-month] [--include-excluded-income]
- * [file.csv] or
+ * [--main-categories] [--include-partial-month] [file.csv] or
  * from Eclipse just run this class; if no file is given a chooser opens. */
 public final class SpendingPlot {
 	/** One spending category and its total (a positive dollar amount). */
@@ -72,7 +71,7 @@ public final class SpendingPlot {
 	record CategoryDeviation(String category,double average,double standardDeviation,double maxDeviation,double maxSpending,double percentage) {}
 	/** A single spending transaction (amount is a positive outflow). */
 	record Transaction(LocalDate date,String category,String payee,String note,double amount) {}
-	record Options(Path csv,boolean mainCategoriesOnly,boolean includePartialMonth,boolean includeExcludedIncome) {}
+	record Options(Path csv,boolean mainCategoriesOnly,boolean includePartialMonth) {}
 	/** A repeated fixed-amount payment that deserves recurring-charge
 	 * review. */
 	record RecurringCandidate(String payee,double amount,String cadence,int occurrences,LocalDate firstDate,LocalDate lastDate,double annualizedAmount,
@@ -90,14 +89,10 @@ public final class SpendingPlot {
 	}
 	// ---- CSV loading ------------------------------------------------------
 	/** Parses every row of the CSV, removes charge/reversal pairs and mirrored
-	 * account duplicates, then drops what Simplifi flagged as excluded. The
-	 * optional income flag retains excluded positive income for the cash-flow
-	 * plot. Every month and category is kept, and the amount keeps its original
-	 * CSV sign (negative = money out). */
+	 * account duplicates, then drops what Simplifi flagged as excluded. Every
+	 * month and category is kept, and the amount keeps its original CSV sign
+	 * (negative = money out). */
 	static List<Transaction> loadAllTransactions(Path csv) {
-		return loadAllTransactions(csv,false);
-	}
-	static List<Transaction> loadAllTransactions(Path csv,boolean includeExcludedIncome) {
 		List<String> lines;
 		try {
 			lines=Files.readAllLines(csv,StandardCharsets.UTF_8);
@@ -133,7 +128,7 @@ public final class SpendingPlot {
 		List<Row> withoutReversals=withoutReversalPairs(rows);
 		List<Row> included=new ArrayList<>();
 		for(Row row:withoutReversals)
-			if(!row.excluded()||(includeExcludedIncome&&row.txn().amount()>0&&isIncomeCategory(row.txn().category()))) included.add(row);
+			if(!row.excluded()) included.add(row);
 		return withoutMirroredDuplicates(included);
 	}
 	static List<Row> withoutReversalPairs(List<Row> rows) {
@@ -924,7 +919,7 @@ public final class SpendingPlot {
 			this(txns,totals,false);
 		}
 		TimeSeriesPanel(List<Transaction> txns,List<CategoryTotal> totals,boolean deviation) {
-			this(txns,totals,deviation,t->YearMonth.from(t.date()),false);
+			this(txns,totals,deviation,t->YearMonth.from(t.date()),true);
 		}
 		TimeSeriesPanel(List<Transaction> txns,List<CategoryTotal> totals,boolean deviation,
 				java.util.function.Function<Transaction,YearMonth> monthOf,boolean regressionLines) {
@@ -987,6 +982,7 @@ public final class SpendingPlot {
 							selSeries=(selSeries==i)?-1:i;
 							selMonth=-1; // clear any point drill-down
 							pressing=(selSeries>=0);
+							recomputeRange();
 							repaint();
 						}
 						return;
@@ -1050,7 +1046,7 @@ public final class SpendingPlot {
 			this.min=lo;
 		}
 		private boolean hasRegression(String seriesName) {
-			return regressionLines&&!seriesName.equals("Income");
+			return regressionLines&&selSeries>=0&&series.get(selSeries).equals(seriesName)&&!seriesName.equals("Income");
 		}
 		private static double[] regressionEndpoints(double[] values) {
 			if(values.length<2) return null;
@@ -1087,6 +1083,7 @@ public final class SpendingPlot {
 			if(bestS<0) return;
 			selSeries=bestS;
 			selMonth=bestI;
+			recomputeRange();
 			repaint();
 			showTransactions(bestS,bestI);
 		}
@@ -1378,7 +1375,6 @@ public final class SpendingPlot {
 		System.out.println("Category mode: "+(options.mainCategoriesOnly()?"main categories only":"categories and subcategories"));
 		System.out.println("Excluded from all spending charts: "+String.join(", ",new TreeSet<>(excludedCategories)));
 		System.out.println("CSV rows marked Exclusion=yes are also excluded.");
-		System.out.println("Excluded income: "+(options.includeExcludedIncome()?"included":"excluded"));
 		System.out.println("Final partial month: "+(options.includePartialMonth()?"included":"excluded"));
 		if(useDeviationExclusions)
 			System.out.println("Excluded only from deviation charts: "+String.join(", ",new TreeSet<>(deviationExcluded)));
@@ -1391,7 +1387,7 @@ public final class SpendingPlot {
 				highDeviationMinStddev,highDeviationMinMax,highDeviationMinPercentage*100);
 		// Load once, unfiltered; each report below filters it for its own
 		// purpose.
-		List<Transaction> all=loadAllTransactions(csv,options.includeExcludedIncome());
+		List<Transaction> all=loadAllTransactions(csv);
 		if(all.isEmpty()) {
 			System.out.println("No rows found in "+csv);
 			return;
@@ -1418,25 +1414,20 @@ public final class SpendingPlot {
 		Path csv=null;
 		boolean mainCategoriesOnly=true;
 		boolean includePartialMonth=true;
-		boolean includeExcludedIncome=false;
 		for(String arg:args) {
 			if(arg.equals("--main-categories")) {
 				mainCategoriesOnly=true;
 			} else if(arg.equals("--include-partial-month")) {
 				includePartialMonth=true;
-			} else if(arg.equals("--include-excluded-income")) {
-				includeExcludedIncome=true;
 			} else if(arg.startsWith("--")) {
-				throw new IllegalArgumentException("Unknown option: "+arg
-						+"\nUsage: SpendingPlot [--main-categories] [--include-partial-month] [--include-excluded-income] [file.csv]");
+				throw new IllegalArgumentException("Unknown option: "+arg+"\nUsage: SpendingPlot [--main-categories] [--include-partial-month] [file.csv]");
 			} else if(csv==null) {
 				csv=Path.of(arg);
 			} else {
-				throw new IllegalArgumentException(
-						"Usage: SpendingPlot [--main-categories] [--include-partial-month] [--include-excluded-income] [file.csv]");
+				throw new IllegalArgumentException("Usage: SpendingPlot [--main-categories] [--include-partial-month] [file.csv]");
 			}
 		}
-		return new Options(csv==null?chooseOrDefault():csv,mainCategoriesOnly,includePartialMonth,includeExcludedIncome);
+		return new Options(csv==null?chooseOrDefault():csv,mainCategoriesOnly,includePartialMonth);
 	}
 	// ---- fields -----------------------------------------------------------
 	/** Min rows an account needs before it can be judged a duplicate link. */
