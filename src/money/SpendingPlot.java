@@ -51,7 +51,6 @@ import javax.swing.JOptionPane;
 import javax.swing.JScrollPane;
 import javax.swing.JTabbedPane;
 import javax.swing.JTable;
-import javax.swing.JTextArea;
 import javax.swing.SwingConstants;
 import javax.swing.SwingUtilities;
 import javax.swing.Timer;
@@ -1112,20 +1111,52 @@ public final class SpendingPlot {
 			}
 			hits.sort(Comparator.comparing(Transaction::date));
 			DateTimeFormatter df=DateTimeFormatter.ofPattern("MMM d",Locale.US);
-			StringBuilder sb=new StringBuilder();
+			Object[][] rows=new Object[hits.size()][5];
 			double total=0;
-			for(Transaction t:hits) {
+			for(int row=0;row<hits.size();row++) {
+				Transaction t=hits.get(row);
 				total+=t.amount();
-				String note=t.note().replaceAll("\\R+"," ").strip();
-				String noteText=note.isEmpty()?"":"  Note: "+note;
-				sb.append(String.format(Locale.US,"%-7s %11s  %-22s %s%s%n",t.date().format(df),money.format(t.amount()),t.category(),t.payee(),noteText));
+				rows[row][0]=t.date();
+				rows[row][1]=t.amount();
+				rows[row][2]=t.category();
+				rows[row][3]=t.payee();
+				rows[row][4]=t.note().replaceAll("\\R+"," ").strip();
 			}
-			if(hits.isEmpty()) sb.append("(no transactions)");
 			String header=String.format(Locale.US,"%s  -  %s   (%d txns, %s)",name,ym.format(xFmt),hits.size(),money.format(total));
-			JTextArea area=new JTextArea(sb.toString(),Math.min(24,Math.max(6,hits.size()+1)),64);
-			area.setEditable(false);
-			area.setFont(new Font(Font.MONOSPACED,Font.PLAIN,14));
-			JOptionPane.showMessageDialog(this,new JScrollPane(area),header,JOptionPane.PLAIN_MESSAGE);
+			DefaultTableModel model=new DefaultTableModel(rows,new Object[] {"Date","Amount","Category","Payee","Note"}) {
+				@Override public boolean isCellEditable(int row,int column) {
+					return false;
+				}
+				@Override public Class<?> getColumnClass(int column) {
+					return column==0?LocalDate.class:column==1?Double.class:String.class;
+				}
+			};
+			JTable table=new JTable(model);
+			table.setAutoCreateRowSorter(true);
+			table.setFont(new Font(Font.SANS_SERIF,Font.PLAIN,14));
+			table.setRowHeight(24);
+			table.getTableHeader().setFont(new Font(Font.SANS_SERIF,Font.BOLD,14));
+			table.getTableHeader().setReorderingAllowed(false);
+			table.getColumnModel().getColumn(0).setCellRenderer(new DefaultTableCellRenderer() {
+				@Override protected void setValue(Object value) {
+					setText(value instanceof LocalDate date?date.format(df):"");
+				}
+			});
+			DefaultTableCellRenderer amountRenderer=new DefaultTableCellRenderer() {
+				@Override protected void setValue(Object value) {
+					setText(value instanceof Number number?money.format(number.doubleValue()):"");
+				}
+			};
+			amountRenderer.setHorizontalAlignment(SwingConstants.RIGHT);
+			table.getColumnModel().getColumn(1).setCellRenderer(amountRenderer);
+			table.getColumnModel().getColumn(0).setPreferredWidth(80);
+			table.getColumnModel().getColumn(1).setPreferredWidth(95);
+			table.getColumnModel().getColumn(2).setPreferredWidth(170);
+			table.getColumnModel().getColumn(3).setPreferredWidth(230);
+			table.getColumnModel().getColumn(4).setPreferredWidth(260);
+			JScrollPane scroll=new JScrollPane(table);
+			scroll.setPreferredSize(new Dimension(900,Math.min(600,Math.max(170,table.getRowHeight()*(hits.size()+2)))));
+			JOptionPane.showMessageDialog(this,scroll,header,JOptionPane.PLAIN_MESSAGE);
 		}
 		/** A washed-out version of a series color, for the non-selected
 		 * lines. */
