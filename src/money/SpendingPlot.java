@@ -51,6 +51,7 @@ import javax.swing.JOptionPane;
 import javax.swing.JScrollPane;
 import javax.swing.JTabbedPane;
 import javax.swing.JTable;
+import javax.swing.JTextField;
 import javax.swing.SwingConstants;
 import javax.swing.SwingUtilities;
 import javax.swing.Timer;
@@ -71,6 +72,7 @@ public final class SpendingPlot {
 	/** A transaction; spending outflows are positive and merchant credits are negative. */
 	record Transaction(LocalDate date,String category,String payee,String note,double amount) {}
 	record Options(Path csv,boolean mainCategoriesOnly,boolean includePartialMonth) {}
+	record RemovedSeries(String pane,String category) {}
 	/** A repeated fixed-amount payment that deserves recurring-charge
 	 * review. */
 	record RecurringCandidate(String payee,double amount,String cadence,int occurrences,LocalDate firstDate,LocalDate lastDate,double annualizedAmount,
@@ -686,17 +688,14 @@ public final class SpendingPlot {
 	private static void showCharts(String title,List<Transaction> transactions,List<CategoryTotal> totals,List<Transaction> cashFlow) {
 		JFrame frame=new JFrame("Spending - "+title);
 		frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-		// Categories the user right-clicks away are collected here (across all
-		// line charts) and persisted on exit; the Resume button re-applies
-		// them.
-		Set<String> removed=new LinkedHashSet<>();
-		List<TimeSeriesPanel> linePanels=new ArrayList<>();
+		Set<RemovedSeries> removed=new LinkedHashSet<>();
+		Map<String,TimeSeriesPanel> linePanels=new LinkedHashMap<>();
 		JTabbedPane tabs=new JTabbedPane();
 		tabs.addTab("By Category",new JScrollPane(new BarChartPanel(totals)));
-		tabs.addTab("Over Time",track(new TimeSeriesPanel(transactions,totals),removed,linePanels));
-		tabs.addTab("Income & Spending",new TimeSeriesPanel(cashFlow,
+		tabs.addTab("Over Time",track("Over Time",new TimeSeriesPanel(transactions,totals),removed,linePanels));
+		tabs.addTab("Income & Spending",track("Income & Spending",new TimeSeriesPanel(cashFlow,
 				List.of(new CategoryTotal("Income",0),new CategoryTotal("Spending",0),new CategoryTotal("Difference",0)),false,
-				SpendingPlot::cashFlowMonth,true));
+				SpendingPlot::cashFlowMonth,true),removed,linePanels));
 		List<CategoryDeviation> deviations=categoryMonthlyDeviations(transactions);
 		// Two deviation panes: after dropping excluded prefixes and categories
 		// below either noise floor, classify each survivor independently.
@@ -753,12 +752,12 @@ public final class SpendingPlot {
 			System.out.printf(Locale.US,"%-9s %-30s %s%n",bucket,d.category(),why);
 		}
 		tabs.addTab("Std Dev",new StdDevPanel(deviations,bucketOf));
-		tabs.addTab("High Deviation",track(deviationPanel(transactions,highDeviation),removed,linePanels));
-		tabs.addTab("High Spending",track(spendingPanel(transactions,highDeviation),removed,linePanels));
-		tabs.addTab("Low Deviation",track(deviationPanel(transactions,lowDeviation),removed,linePanels));
-		tabs.addTab("Low Spending",track(spendingPanel(transactions,lowDeviation),removed,linePanels));
-		tabs.addTab("Omitted Deviation",track(deviationPanel(transactions,omittedDeviation),removed,linePanels));
-		tabs.addTab("Omitted Spending",track(spendingPanel(transactions,omittedDeviation),removed,linePanels));
+		tabs.addTab("High Deviation",track("High Deviation",deviationPanel(transactions,highDeviation),removed,linePanels));
+		tabs.addTab("High Spending",track("High Spending",spendingPanel(transactions,highDeviation),removed,linePanels));
+		tabs.addTab("Low Deviation",track("Low Deviation",deviationPanel(transactions,lowDeviation),removed,linePanels));
+		tabs.addTab("Low Spending",track("Low Spending",spendingPanel(transactions,lowDeviation),removed,linePanels));
+		tabs.addTab("Omitted Deviation",track("Omitted Deviation",deviationPanel(transactions,omittedDeviation),removed,linePanels));
+		tabs.addTab("Omitted Spending",track("Omitted Spending",spendingPanel(transactions,omittedDeviation),removed,linePanels));
 		// Fifth pane: total monthly spending as one series, plotted as its
 		// dollar deviation from the overall monthly mean.
 		List<Transaction> totalTxns=new ArrayList<>();
@@ -767,13 +766,20 @@ public final class SpendingPlot {
 			totalTxns.add(new Transaction(t.date(),"Total",t.payee(),t.note(),t.amount()));
 			grand+=t.amount();
 		}
-		tabs.addTab("Total Deviation",track(new TimeSeriesPanel(totalTxns,List.of(new CategoryTotal("Total",grand)),true),removed,linePanels));
+		tabs.addTab("Total Deviation",track("Total Deviation",
+				new TimeSeriesPanel(totalTxns,List.of(new CategoryTotal("Total",grand)),true),removed,linePanels));
 		// Toolbar with a button to re-hide the categories removed last time.
 		JButton resume=new JButton("Resume where I left off");
 		resume.addActionListener(_-> {
-			for(String cat:loadRemovedCategories(removedCategoriesFile))
-				for(TimeSeriesPanel p:linePanels)
-					p.removeCategory(cat);
+			for(RemovedSeries item:loadRemovedCategories(removedCategoriesFile)) {
+				if(item.pane().equals("*")) {
+					for(TimeSeriesPanel panel:linePanels.values())
+						panel.removeCategory(item.category());
+				} else {
+					TimeSeriesPanel panel=linePanels.get(item.pane());
+					if(panel!=null) panel.removeCategory(item.category());
+				}
+			}
 		});
 		JPanel toolbar=new JPanel(new FlowLayout(FlowLayout.LEFT));
 		toolbar.add(resume);
@@ -806,20 +812,19 @@ public final class SpendingPlot {
 			if(keep.contains(t.category())) spendingTxns.add(t);
 		return new TimeSeriesPanel(spendingTxns,categoryTotals(spendingTxns));
 	}
-	/** Wires a line panel to the shared removed-set and registry, then returns
-	 * it. */
-	private static TimeSeriesPanel track(TimeSeriesPanel panel,Set<String> removed,List<TimeSeriesPanel> registry) {
-		panel.setRemovedSink(removed);
-		registry.add(panel);
+	/** Wires a line panel to the removed-series set and pane registry. */
+	private static TimeSeriesPanel track(String pane,TimeSeriesPanel panel,Set<RemovedSeries> removed,
+			Map<String,TimeSeriesPanel> registry) {
+		panel.setRemovedSink(pane,removed);
+		registry.put(pane,panel);
 		return panel;
 	}
-	/** Writes the removed categories to a properties file (one per numbered
-	 * key). */
-	private static void saveRemovedCategories(Set<String> removed,Path file) {
+	/** Writes the removed pane/category pairs to a properties file. */
+	private static void saveRemovedCategories(Set<RemovedSeries> removed,Path file) {
 		Properties p=new Properties();
 		int i=0;
-		for(String c:removed)
-			p.setProperty("removed."+(i++),c);
+		for(RemovedSeries item:removed)
+			p.setProperty("removed."+(i++),item.pane()+"\t"+item.category());
 		try(var out=Files.newOutputStream(file)) {
 			p.store(out,"Categories removed from the charts");
 		} catch(IOException e) {
@@ -828,8 +833,8 @@ public final class SpendingPlot {
 	}
 	/** Reads back the removed categories saved by
 	 * {@link #saveRemovedCategories}. */
-	private static List<String> loadRemovedCategories(Path file) {
-		List<String> out=new ArrayList<>();
+	private static List<RemovedSeries> loadRemovedCategories(Path file) {
+		List<RemovedSeries> out=new ArrayList<>();
 		if(!Files.exists(file)) return out;
 		Properties p=new Properties();
 		try(var in=Files.newInputStream(file)) {
@@ -839,7 +844,11 @@ public final class SpendingPlot {
 			return out;
 		}
 		p.stringPropertyNames().stream().filter(k->k.startsWith("removed."))
-				.sorted(Comparator.comparingInt(k->Integer.parseInt(k.substring("removed.".length())))).forEach(k->out.add(p.getProperty(k)));
+				.sorted(Comparator.comparingInt(k->Integer.parseInt(k.substring("removed.".length())))).forEach(k-> {
+					String value=p.getProperty(k);
+					int separator=value.indexOf('\t');
+					out.add(separator<0?new RemovedSeries("*",value):new RemovedSeries(value.substring(0,separator),value.substring(separator+1)));
+				});
 		return out;
 	}
 	private static Color seriesColor(int i) {
@@ -1012,9 +1021,9 @@ public final class SpendingPlot {
 				}
 			});
 		}
-		/** Records every category removed from this chart, if set (shared
-		 * across charts). */
-		void setRemovedSink(Set<String> sink) {
+		/** Records every category removed from this pane. */
+		void setRemovedSink(String pane,Set<RemovedSeries> sink) {
+			this.pane=pane;
 			this.removedSink=sink;
 		}
 		/** Removes a category by name (used by the Resume button); no-op if
@@ -1029,7 +1038,7 @@ public final class SpendingPlot {
 			if(i<0||i>=series.size()) return;
 			String removed=series.remove(i);
 			values.remove(removed);
-			if(removedSink!=null) removedSink.add(removed);
+			if(removedSink!=null) removedSink.add(new RemovedSeries(pane,removed));
 			if(selSeries==i) selSeries=-1;
 			else if(selSeries>i) selSeries--;
 			selMonth=-1;
@@ -1133,8 +1142,10 @@ public final class SpendingPlot {
 			};
 			JTable table=new JTable(model);
 			table.setAutoCreateRowSorter(true);
+			table.setCellSelectionEnabled(true);
 			table.setFont(new Font(Font.SANS_SERIF,Font.PLAIN,14));
 			table.setRowHeight(24);
+			table.setToolTipText("Select cells and press Ctrl+C to copy");
 			table.getTableHeader().setFont(new Font(Font.SANS_SERIF,Font.BOLD,14));
 			table.getTableHeader().setReorderingAllowed(false);
 			table.getColumnModel().getColumn(0).setCellRenderer(new DefaultTableCellRenderer() {
@@ -1156,7 +1167,13 @@ public final class SpendingPlot {
 			table.getColumnModel().getColumn(4).setPreferredWidth(260);
 			JScrollPane scroll=new JScrollPane(table);
 			scroll.setPreferredSize(new Dimension(900,Math.min(600,Math.max(170,table.getRowHeight()*(hits.size()+2)))));
-			JOptionPane.showMessageDialog(this,scroll,header,JOptionPane.PLAIN_MESSAGE);
+			JTextField summary=new JTextField(header);
+			summary.setEditable(false);
+			summary.setFont(new Font(Font.SANS_SERIF,Font.PLAIN,14));
+			JPanel content=new JPanel(new BorderLayout(0,6));
+			content.add(summary,BorderLayout.NORTH);
+			content.add(scroll,BorderLayout.CENTER);
+			JOptionPane.showMessageDialog(this,content,"Transactions",JOptionPane.PLAIN_MESSAGE);
 		}
 		/** A washed-out version of a series color, for the non-selected
 		 * lines. */
@@ -1312,7 +1329,8 @@ public final class SpendingPlot {
 		private final List<Rectangle> legendHit=new ArrayList<>(); // legend row
 																	// hit boxes
 		private boolean pressing; // true while a legend label is held
-		private Set<String> removedSink; // collects removed categories, if set
+		private String pane;
+		private Set<RemovedSeries> removedSink;
 	}
 	/** Monthly average and variability for every spending category. */
 	/** Background color for a deviation bucket, used across the Std Dev table.
