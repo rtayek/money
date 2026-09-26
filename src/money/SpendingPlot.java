@@ -69,7 +69,7 @@ public final class SpendingPlot {
 	record CategoryTotal(String category,double total) {}
 	/** Monthly average and variability for one spending category. */
 	record CategoryDeviation(String category,double average,double standardDeviation,double maxDeviation,double maxSpending,double percentage) {}
-	/** A single spending transaction (amount is a positive outflow). */
+	/** A transaction; spending outflows are positive and merchant credits are negative. */
 	record Transaction(LocalDate date,String category,String payee,String note,double amount) {}
 	record Options(Path csv,boolean mainCategoriesOnly,boolean includePartialMonth) {}
 	/** A repeated fixed-amount payment that deserves recurring-charge
@@ -128,7 +128,7 @@ public final class SpendingPlot {
 		List<Row> withoutReversals=withoutReversalPairs(rows);
 		List<Row> included=new ArrayList<>();
 		for(Row row:withoutReversals)
-			if(!row.excluded()) included.add(row);
+			if(!row.excluded()||merchantCreditCategory(row.txn())!=null) included.add(row);
 		return withoutMirroredDuplicates(included);
 	}
 	static List<Row> withoutReversalPairs(List<Row> rows) {
@@ -282,13 +282,18 @@ public final class SpendingPlot {
 		}
 	}
 	/** Narrows an unfiltered transaction list down to what the charts show:
-	 * outflows only (amount flipped to a positive spending magnitude), the
-	 * generic income/transfer categories dropped, anything before
-	 * {@link #startDate} dropped, and the current (still-accumulating) month
-	 * dropped since it's only partial. */
+	 * outflows become positive spending, recognized merchant credits become
+	 * negative spending, and income/transfers and dates outside the report
+	 * period are dropped. */
 	static List<Transaction> toSpendingTransactions(List<Transaction> all,boolean includePartialMonth) {
 		List<Transaction> out=new ArrayList<>();
 		for(Transaction t:all) {
+			String creditCategory=merchantCreditCategory(t);
+			if(creditCategory!=null) {
+				if(inReportPeriod(t,includePartialMonth))
+					out.add(new Transaction(t.date(),creditCategory,t.payee(),t.note(),-t.amount()));
+				continue;
+			}
 			if(t.amount()>=0) continue; // only outflows count as spending
 			if(excludedCategories.contains(t.category())) continue;
 			if(!inReportPeriod(t,includePartialMonth)) continue;
@@ -301,7 +306,8 @@ public final class SpendingPlot {
 		Map<YearMonth,Double> incomeByMonth=new LinkedHashMap<>();
 		Map<YearMonth,Double> spendingByMonth=new LinkedHashMap<>();
 		for(Transaction t:all) {
-			if(t.amount()<=0||!isIncomeCategory(t.category())||!inReportPeriod(t,includePartialMonth)||t.date()==null) continue;
+			if(t.amount()<=0||merchantCreditCategory(t)!=null||!isIncomeCategory(t.category())||!inReportPeriod(t,includePartialMonth)||t.date()==null)
+				continue;
 			out.add(new Transaction(t.date(),"Income",t.payee(),t.note(),t.amount()));
 			incomeByMonth.merge(incomeMonth(t),t.amount(),Double::sum);
 		}
@@ -320,6 +326,13 @@ public final class SpendingPlot {
 	}
 	private static boolean isIncomeCategory(String category) {
 		return category.equals("Personal Income")||category.startsWith("Personal Income:");
+	}
+	private static String merchantCreditCategory(Transaction transaction) {
+		if(transaction.amount()<=0||transaction.payee()==null) return null;
+		String payee=transaction.payee().toLowerCase(Locale.ROOT);
+		for(Map.Entry<String,String> merchant:merchantCreditCategories.entrySet())
+			if(payee.contains(merchant.getKey())) return merchant.getValue();
+		return null;
 	}
 	private static YearMonth incomeMonth(Transaction transaction) {
 		YearMonth postedMonth=YearMonth.from(transaction.date());
@@ -1374,7 +1387,7 @@ public final class SpendingPlot {
 		}
 		System.out.println("Category mode: "+(options.mainCategoriesOnly()?"main categories only":"categories and subcategories"));
 		System.out.println("Excluded from all spending charts: "+String.join(", ",new TreeSet<>(excludedCategories)));
-		System.out.println("CSV rows marked Exclusion=yes are also excluded.");
+		System.out.println("CSV rows marked Exclusion=yes are excluded except recognized merchant credits.");
 		System.out.println("Final partial month: "+(options.includePartialMonth()?"included":"excluded"));
 		if(useDeviationExclusions)
 			System.out.println("Excluded only from deviation charts: "+String.join(", ",new TreeSet<>(deviationExcluded)));
@@ -1437,6 +1450,7 @@ public final class SpendingPlot {
 	private static final double mirrorFraction=0.90;
 	private static final int reversalMaxDays=3;
 	private static final Pattern reversalPayee=Pattern.compile("(?i)\\b(adj|adjustment|adjusted|reversal|reversed|refund|credit)\\b");
+	private static final Map<String,String> merchantCreditCategories=Map.of("amazon","Shopping","temu","Shopping","walmart","Shopping");
 	/** Max distinct category lines drawn on the time chart; the rest =
 	 * "Other". */
 	private static final int maxSeries=100;
