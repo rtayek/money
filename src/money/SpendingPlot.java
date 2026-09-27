@@ -1474,7 +1474,7 @@ public final class SpendingPlot {
 	}
 	private static Options parseOptions(String[] args) {
 		Path csv=null;
-		boolean mainCategoriesOnly=true;
+		boolean mainCategoriesOnly=false;
 		boolean includePartialMonth=true;
 		for(String arg:args) {
 			if(arg.equals("--main-categories")) {
