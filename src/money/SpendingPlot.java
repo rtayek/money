@@ -174,113 +174,19 @@ public final class SpendingPlot {
 	private static boolean looksLikeReversal(String payee) {
 		return payee!=null&&reversalPayee.matcher(payee).find();
 	}
-	/** Drops exact duplicates created when one real account is linked into
-	 * Simplifi twice (e.g. "Traditional Gold Card" and "American Express
-	 * Traditional Gold" carry the same charges). An account is treated as a
-	 * mirror when at least {@link #mirrorFraction} of its rows have an exact
-	 * (date, payee, amount) twin in one other account; the smaller account's
-	 * mirrored rows are then removed. Duplicates are only collapsed across
-	 * different accounts, so genuine same-day repeats within one account are
-	 * kept, and unrelated accounts that share the odd identical charge are left
-	 * alone. */
 	static List<Transaction> withoutMirroredDuplicates(List<Row> rows) {
-		Map<String,List<Row>> byAccount=new LinkedHashMap<>();
-		for(Row r:rows)
-			byAccount.computeIfAbsent(r.account(),k->new ArrayList<>()).add(r);
-		Map<String,String> mirrorOf=detectMirrors(byAccount);
-		Map<String,Map<String,List<Row>>> available=new LinkedHashMap<>();
-		for(String partner:new HashSet<>(mirrorOf.values())) {
-			available.put(partner,rowsByKey(byAccount.get(partner)));
-		}
 		List<Transaction> out=new ArrayList<>(rows.size());
-		int dropped=0;
-		int categoryConflicts=0;
-		for(Row r:rows) {
-			String partner=mirrorOf.get(r.account());
-			if(partner!=null) {
-				Map<String,List<Row>> avail=available.get(partner);
-				List<Row> twins=avail.get(r.key());
-				if(twins!=null&&!twins.isEmpty()) {
-					Row kept=twins.remove(twins.size()-1);
-					if(!r.txn().category().equalsIgnoreCase(kept.txn().category())) {
-						categoryConflicts++;
-						System.out.printf(Locale.US,
-								"Warning: mirrored copies have different categories: "+"%s | %s | %,.2f | dropping %s [%s], keeping %s [%s]%n",r.txn().date(),
-								r.txn().payee(),r.txn().amount(),r.account(),r.txn().category(),kept.account(),kept.txn().category());
-					}
-					dropped++;
-					continue;
-				}
-			}
+		for(Row r:MirrorDuplicates.remove(rows))
 			out.add(r.txn());
-		}
-		if(dropped>0) {
-			System.out.printf(Locale.US,"Ignored %d duplicate rows from mirrored account(s): %s%n",dropped,mirrorOf);
-		}
-		if(categoryConflicts>0) {
-			System.out.printf(Locale.US,"Found %d mirrored category conflict(s); review the warnings above.%n",categoryConflicts);
-		}
 		return out;
-	}
-	/** Maps each mirror account to the account whose copy is kept. */
-	private static Map<String,String> detectMirrors(Map<String,List<Row>> byAccount) {
-		Map<String,String> mirrorOf=new LinkedHashMap<>();
-		if(byAccount.size()<2) return mirrorOf;
-		Map<String,Map<String,Integer>> counts=new LinkedHashMap<>();
-		for(Map.Entry<String,List<Row>> e:byAccount.entrySet()) {
-			counts.put(e.getKey(),keyCounts(e.getValue()));
-		}
-		for(String a:byAccount.keySet()) {
-			int size=byAccount.get(a).size();
-			if(size<mirrorMinRows) continue;
-			String best=null;
-			int bestOverlap=0;
-			for(String b:byAccount.keySet()) {
-				if(b.equals(a)) continue;
-				int ov=overlap(counts.get(a),counts.get(b));
-				if(ov>bestOverlap) {
-					bestOverlap=ov;
-					best=b;
-				}
-			}
-			if(best!=null&&bestOverlap>=mirrorFraction*size) {
-				int bSize=byAccount.get(best).size();
-				// strip the smaller account (ties: the later-sorting name),
-				// keep the other
-				if(size<bSize||(size==bSize&&a.compareTo(best)>0)) {
-					mirrorOf.put(a,best);
-				}
-			}
-		}
-		return mirrorOf;
-	}
-	private static Map<String,List<Row>> rowsByKey(List<Row> rows) {
-		Map<String,List<Row>> m=new LinkedHashMap<>();
-		for(Row r:rows)
-			m.computeIfAbsent(r.key(),_->new ArrayList<>()).add(r);
-		return m;
-	}
-	private static Map<String,Integer> keyCounts(List<Row> rows) {
-		Map<String,Integer> m=new LinkedHashMap<>();
-		for(Row r:rows)
-			m.merge(r.key(),1,Integer::sum);
-		return m;
-	}
-	/** Count of shared keys between two multisets, respecting multiplicity. */
-	private static int overlap(Map<String,Integer> a,Map<String,Integer> b) {
-		int total=0;
-		for(Map.Entry<String,Integer> e:a.entrySet()) {
-			Integer bc=b.get(e.getKey());
-			if(bc!=null) total+=Math.min(e.getValue(),bc);
-		}
-		return total;
 	}
 	/** A parsed row plus its source account, used only for duplicate
 	 * detection. */
-	record Row(String account,Transaction txn,boolean excluded) {
-		String key() {
-			return txn.date()+"|"+txn.payee()+"|"+String.format(Locale.US,"%.2f",txn.amount());
-		}
+	record Row(String account,Transaction txn,boolean excluded) implements MirrorDuplicates.Candidate {
+		@Override public LocalDate date() { return txn.date(); }
+		@Override public String payee() { return txn.payee(); }
+		@Override public String category() { return txn.category(); }
+		@Override public double amount() { return txn.amount(); }
 	}
 	/** Narrows an unfiltered transaction list down to what the charts show:
 	 * outflows become positive spending, recognized merchant credits become
@@ -1492,11 +1398,6 @@ public final class SpendingPlot {
 		return new Options(csv==null?chooseOrDefault():csv,mainCategoriesOnly,includePartialMonth);
 	}
 	// ---- fields -----------------------------------------------------------
-	/** Min rows an account needs before it can be judged a duplicate link. */
-	private static final int mirrorMinRows=20;
-	/** Fraction of an account's rows that must be exact twins of one other
-	 * account to call it a mirror. */
-	private static final double mirrorFraction=0.90;
 	private static final int reversalMaxDays=3;
 	private static final Pattern reversalPayee=Pattern.compile("(?i)\\b(adj|adjustment|adjusted|reversal|reversed|refund|credit)\\b");
 	private static final Map<String,String> merchantCreditCategories=Map.of("amazon","Shopping","temu","Shopping","walmart","Shopping");

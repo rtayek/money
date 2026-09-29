@@ -33,7 +33,8 @@ public final class AmexMatchReport {
     private static final Set<String> AMEX_ACCOUNTS = Set.of(
             "American Express\u00ae Traditional Gold", "Traditional Gold Card");
 
-    record SimplifiRow(LocalDate date, String account, String payee, String category, double amount) {}
+    record SimplifiRow(LocalDate date, String account, String payee, String category, double amount)
+            implements MirrorDuplicates.Candidate {}
     record PlaidRow(LocalDate date, String name, String merchantName, String originalDescription, double amount) {}
     record MatchResult(PlaidRow row, boolean ambiguous) {}
 
@@ -42,7 +43,7 @@ public final class AmexMatchReport {
         Path plaidCsv = Path.of(args.length > 1 ? args[1] : "plaid-transactions.csv");
         Path output = Path.of("build", "reports", "amex-match-report.csv");
 
-        List<SimplifiRow> amexRows = loadSimplifiAmexRows(simplifiCsv);
+        List<SimplifiRow> amexRows = MirrorDuplicates.remove(loadSimplifiAmexRows(simplifiCsv));
         List<PlaidRow> plaidRows = loadPlaidRows(plaidCsv);
 
         List<String> lines = new ArrayList<>();
@@ -106,7 +107,7 @@ public final class AmexMatchReport {
             if (usedPlaid[i]) continue;
             PlaidRow p = plaidRows.get(i);
             if (Math.abs(Math.abs(p.amount()) - Math.abs(s.amount())) > AMOUNT_TOLERANCE) continue;
-            if (!sameTransactionDirection(s.amount(), p.amount())) continue;
+            if (!CategorizationAudit.sameTransactionDirection(s.amount(), p.amount())) continue;
 
             long days = Math.abs(java.time.temporal.ChronoUnit.DAYS.between(s.date(), p.date()));
             if (days > DATE_TOLERANCE_DAYS) continue;
@@ -125,13 +126,6 @@ public final class AmexMatchReport {
         if (bestIndex < 0) return null;
         usedPlaid[bestIndex] = true;
         return new MatchResult(plaidRows.get(bestIndex), tiedBest > 1);
-    }
-
-    private static boolean sameTransactionDirection(double simplifiAmount, double plaidAmount) {
-        if (simplifiAmount == 0 || plaidAmount == 0) {
-            return simplifiAmount == 0 && plaidAmount == 0;
-        }
-        return Math.signum(simplifiAmount) == -Math.signum(plaidAmount);
     }
 
     private static boolean merchantRelated(String payee, PlaidRow plaid) {

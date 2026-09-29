@@ -12,9 +12,8 @@ same real-world charge as positive. Code comparing an amount from `all.csv`
 to the corresponding Plaid amount must check for **opposite signs**, not
 equal signs, to confirm "same real transaction."
 
-Currently implemented as `sameTransactionDirection` in both
-`AmexMatchReport.java` and `CategorizationAudit.java` -- duplicated, not
-shared. Worth pulling into one place before it drifts.
+Implemented once as `CategorizationAudit.sameTransactionDirection`;
+`AmexMatchReport` calls it from there.
 
 ## Cross-account mirror detection (duplicate-linked accounts)
 
@@ -27,11 +26,13 @@ the most exact (date, payee, amount) twins. If that overlap is >= 90% of the
 smaller account's row count, treat the smaller as a mirror and drop its rows,
 keeping the larger.
 
-Implemented in `SpendingPlot.withoutMirroredDuplicates`. Confirmed dropping
-130 duplicate rows on real data. Not yet applied in `AmexMatchReport`, which
-likely understates its match rate on Amex data as a result -- each duplicate
-row competes for the same one real Plaid row, so roughly half will show as
-"unmatched" even when the real charge did match.
+Implemented in `MirrorDuplicates.remove`, used by `SpendingPlot`,
+`AmexMatchReport`, and `CategorizationAudit`; a row type opts in by
+implementing `MirrorDuplicates.Candidate`. Confirmed dropping 130 duplicate
+rows on real data in `SpendingPlot`. Without it, each duplicate row competes
+for the same one real Plaid row, so roughly half show as "unmatched" even
+when the real charge did match. `AmazonTransactionReview` still has its own
+separate, hard-coded version.
 
 ## One-to-one matching between two transaction feeds
 

@@ -54,8 +54,10 @@ live in `doc/patterns.md` -- read it for any task touching `SpendingPlot`,
   which Claude does not have access to. `scripts/last-60-amazon.sh` prints
   the last 60 days of action items via R, sorted newest first.
 - `AmexMatchReport` and `CategorizationAudit` -- match Simplifi rows to
-  Plaid rows: one-to-one, sign-aware, merchant-token-based. Still do NOT
-  have SpendingPlot's mirror-dedup applied (see Next).
+  Plaid rows: one-to-one, sign-aware, merchant-token-based. As of
+  2026-09-29 both drop mirror duplicates first, via the shared
+  `MirrorDuplicates` class (extracted from `SpendingPlot`), and share one
+  `sameTransactionDirection`. Checked only on synthetic data so far.
 - `tools/plaid/PullTransactions.java` -- archived source, builds/runs in a
   separate Plaid Quickstart clone. Tags each row with an account label,
   pulls up to the 2-year max history (set at Link time, not pull time).
@@ -71,10 +73,8 @@ live in `doc/patterns.md` -- read it for any task touching `SpendingPlot`,
 
 ## Next
 
-- Apply `SpendingPlot`'s mirror-dedup to `AmexMatchReport` and
-  `CategorizationAudit` too, so their match-rate isn't distorted by the
-  still-unresolved duplicate Amex account.
-- Pull `sameTransactionDirection` out of both matchers into one shared spot.
+- Run `AmexMatchReport` and `CategorizationAudit` on real data to confirm
+  the mirror-dedup raises their match rates as expected.
 - Pursue GitHub Support to purge the dangling `copy-of-action-checklist.md`
   commit (`bab6815`): the `money` repo is PUBLIC and that unreachable commit
   is still fetchable by SHA. Confirm no forks first (a fork keeps it alive).
@@ -82,6 +82,11 @@ live in `doc/patterns.md` -- read it for any task touching `SpendingPlot`,
   Your Orders.zip` -- only synthetic-data-tested so far.
 
 ## Decisions
+
+- The 10% relative-std-dev rule stays: large, steady categories such as
+  Mortgage and Health Insurance go to Omitted (still shown on the Omitted
+  tabs), which keeps the High and Low charts less crowded. Ray confirmed
+  2026-09-29.
 
 - `human.md`/`persona.md` retired from the `money` repo entirely,
   2026-09-28 -- no longer materialized here at all. This supersedes the
@@ -119,14 +124,8 @@ live in `doc/patterns.md` -- read it for any task touching `SpendingPlot`,
 
 ## Open questions
 
-- A new rule (added outside this chat, 2026-09-28) omits any category
-  whose relative std dev is under 10% of its own average, checked before
-  the "steady -> Low" rule Ray and Claude built together. Net effect:
-  Mortgage and Health Insurance -- both very large, very steady -- now
-  land in Omitted instead of Low, disappearing from both deviation charts
-  entirely. Asked Ray whether he wants them back in Low (visible, just
-  correctly labeled boring) or is fine with the new Omitted behavior.
-  Not yet answered.
+- `UncategorizedCheckReport.java` is still in `src/money/`, although the
+  Decisions section says it was deleted 2026-09-21.
 
 ## Deferred
 

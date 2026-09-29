@@ -40,8 +40,8 @@ public final class CategorizationAudit {
     }
 
     public void run() {
-        List<Entry> quicken = load(quickenCsv,
-                formatADate, formatAPayee, formatAAmount, true);
+        List<Entry> quicken = MirrorDuplicates.remove(load(quickenCsv,
+                formatADate, formatAPayee, formatAAmount, true));
         List<Entry> plaid = load(plaidCsv,
                 formatBDate, formatBText, formatBAmount, false);
         Audit audit = match(quicken, plaid);
@@ -105,7 +105,7 @@ public final class CategorizationAudit {
      * Simplifi records spending as negative while Plaid records spending as
      * positive, so corresponding transactions normally have opposite signs.
      */
-    private static boolean sameTransactionDirection(double simplifiAmount, double plaidAmount) {
+    static boolean sameTransactionDirection(double simplifiAmount, double plaidAmount) {
         if (simplifiAmount == 0 || plaidAmount == 0) {
             return simplifiAmount == 0 && plaidAmount == 0;
         }
@@ -167,6 +167,8 @@ public final class CategorizationAudit {
         int exclusionCol = simplifi ? indexOfHeader(header, "Exclusion") : -1;
         int merchantCol = simplifi ? -1 : indexOfHeader(header, "MerchantName");
         int nameCol = simplifi ? -1 : indexOfHeader(header, "Name");
+        int accountCol = simplifi ? indexOfHeader(header, "Account") : -1;
+        int categoryCol = indexOfHeader(header, "Category");
         if (dateCol < 0 || textCol < 0 || amtCol < 0) {
             throw new IllegalStateException("Missing required CSV columns in " + csv + ": " + header);
         }
@@ -183,7 +185,8 @@ public final class CategorizationAudit {
             if (!simplifi && text.isBlank()) text = field(f, merchantCol);
             if (!simplifi && text.isBlank()) text = field(f, nameCol);
             double amount = parseAmount(field(f, amtCol));
-            rows.add(new Entry(date, text, cleanPayee(text), amount));
+            rows.add(new Entry(date, field(f, accountCol), text, field(f, categoryCol),
+                    cleanPayee(text), amount));
         }
         return rows;
     }
@@ -268,7 +271,10 @@ public final class CategorizationAudit {
         return s.length() <= n ? s : s.substring(0, n - 1) + ".";
     }
 
-    record Entry(LocalDate date, String rawSource, String cleaned, double amount) {}
+    record Entry(LocalDate date, String account, String rawSource, String category,
+                 String cleaned, double amount) implements MirrorDuplicates.Candidate {
+        @Override public String payee() { return rawSource; }
+    }
     record Match(Entry quicken, Entry plaid, boolean ambiguous) {}
     record Audit(List<Match> matches, List<Entry> unmatchedPlaid) {}
 
