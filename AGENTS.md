@@ -148,7 +148,7 @@ Client-specific skill locations MAY differ. Selected skills should be deployed a
 
 This file is the primary governing document for agent behavior in the repository.
 
-Critical instructions MUST NOT depend on automatic discovery of `human.md`, `persona.md`, `index.md`, historical handoffs, or other secondary files.
+Critical instructions MUST NOT depend on automatic discovery of secondary project documents.
 
 Additional project documents SHOULD be named explicitly in the project-context section below together with the condition that requires reading them.
 

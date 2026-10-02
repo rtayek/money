@@ -162,7 +162,7 @@ public final class UncategorizedCheckReport {
 
     private static final Path defaultInput = Path.of("all.csv");
     private static final Path defaultOutput =
-            Path.of("build", "reports", "uncategorized-checks.csv");
+            Path.of("reports", "uncategorized-checks.csv");
     private static final Pattern checkPayee =
             Pattern.compile("(?i)^check\\s+(\\d+)\\s*$");
     private static final String[] datePatterns = {
