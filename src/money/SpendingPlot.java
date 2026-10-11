@@ -46,12 +46,16 @@ import java.util.regex.Pattern;
 import javax.swing.JButton;
 import javax.swing.JFileChooser;
 import javax.swing.JFrame;
+import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.JOptionPane;
 import javax.swing.JScrollPane;
+import javax.swing.JSpinner;
 import javax.swing.JTabbedPane;
 import javax.swing.JTable;
 import javax.swing.JTextField;
+import javax.swing.JToggleButton;
+import javax.swing.SpinnerNumberModel;
 import javax.swing.SwingConstants;
 import javax.swing.SwingUtilities;
 import javax.swing.Timer;
@@ -73,6 +77,7 @@ public final class SpendingPlot {
 	record Transaction(LocalDate date,String category,String payee,String note,double amount) {}
 	record Options(Path csv,boolean mainCategoriesOnly,boolean includePartialMonth) {}
 	record RemovedSeries(String pane,String category) {}
+	record ChartSelection(boolean subcategories,boolean allHistory,int months,boolean includePartialMonth) {}
 	/** A repeated fixed-amount payment that deserves recurring-charge
 	 * review. */
 	record RecurringCandidate(String payee,double amount,String cadence,int occurrences,LocalDate firstDate,LocalDate lastDate,double annualizedAmount,
@@ -193,27 +198,35 @@ public final class SpendingPlot {
 	 * negative spending, and income/transfers and dates outside the report
 	 * period are dropped. */
 	static List<Transaction> toSpendingTransactions(List<Transaction> all,boolean includePartialMonth) {
+		return toSpendingTransactions(all,startDate,includePartialMonth);
+	}
+	static List<Transaction> toSpendingTransactions(List<Transaction> all,LocalDate earliestDate,boolean includePartialMonth) {
 		List<Transaction> out=new ArrayList<>();
 		for(Transaction t:all) {
 			String creditCategory=merchantCreditCategory(t);
 			if(creditCategory!=null) {
-				if(inReportPeriod(t,includePartialMonth))
+				if(inReportPeriod(t,earliestDate,includePartialMonth))
 					out.add(new Transaction(t.date(),creditCategory,t.payee(),t.note(),-t.amount()));
 				continue;
 			}
 			if(t.amount()>=0) continue; // only outflows count as spending
 			if(excludedCategories.contains(t.category())) continue;
-			if(!inReportPeriod(t,includePartialMonth)) continue;
+			if(!inReportPeriod(t,earliestDate,includePartialMonth)) continue;
 			out.add(new Transaction(t.date(),t.category(),t.payee(),t.note(),-t.amount()));
 		}
 		return out;
 	}
 	static List<Transaction> cashFlowTransactions(List<Transaction> all,List<Transaction> spending,boolean includePartialMonth) {
+		return cashFlowTransactions(all,spending,startDate,includePartialMonth);
+	}
+	static List<Transaction> cashFlowTransactions(List<Transaction> all,List<Transaction> spending,LocalDate earliestDate,
+			boolean includePartialMonth) {
 		List<Transaction> out=new ArrayList<>();
 		Map<YearMonth,Double> incomeByMonth=new LinkedHashMap<>();
 		Map<YearMonth,Double> spendingByMonth=new LinkedHashMap<>();
 		for(Transaction t:all) {
-			if(t.amount()<=0||merchantCreditCategory(t)!=null||!isIncomeCategory(t.category())||!inReportPeriod(t,includePartialMonth)||t.date()==null)
+			if(t.amount()<=0||merchantCreditCategory(t)!=null||!isIncomeCategory(t.category())
+					||!inReportPeriod(t,earliestDate,includePartialMonth)||t.date()==null)
 				continue;
 			out.add(new Transaction(t.date(),"Income",t.payee(),t.note(),t.amount()));
 			incomeByMonth.merge(incomeMonth(t),t.amount(),Double::sum);
@@ -252,8 +265,17 @@ public final class SpendingPlot {
 		return transaction.category().equals("Income")?incomeMonth(transaction):YearMonth.from(transaction.date());
 	}
 	private static boolean inReportPeriod(Transaction t,boolean includePartialMonth) {
-		if(startDate!=null&&t.date()!=null&&t.date().isBefore(startDate)) return false;
+		return inReportPeriod(t,startDate,includePartialMonth);
+	}
+	private static boolean inReportPeriod(Transaction t,LocalDate earliestDate,boolean includePartialMonth) {
+		if(earliestDate!=null&&t.date()!=null&&t.date().isBefore(earliestDate)) return false;
 		return includePartialMonth||t.date()==null||!YearMonth.from(t.date()).equals(YearMonth.now());
+	}
+	static LocalDate chartStartDate(ChartSelection selection) {
+		if(selection.allHistory()) return null;
+		YearMonth current=YearMonth.now();
+		int monthsBefore=selection.includePartialMonth()?selection.months()-1:selection.months();
+		return current.minusMonths(monthsBefore).atDay(1);
 	}
 	static List<Transaction> mainCategories(List<Transaction> transactions) {
 		List<Transaction> out=new ArrayList<>(transactions.size());
@@ -591,12 +613,83 @@ public final class SpendingPlot {
 		int r=fc.showOpenDialog(null);
 		return (r==JFileChooser.APPROVE_OPTION)?fc.getSelectedFile().toPath():null;
 	}
-	private static void showCharts(String title,List<Transaction> transactions,List<CategoryTotal> totals,List<Transaction> cashFlow) {
+	private static void showCharts(String title,List<Transaction> all,Options options) {
 		JFrame frame=new JFrame("Spending - "+title);
 		frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
 		Set<RemovedSeries> removed=new LinkedHashSet<>();
 		Map<String,TimeSeriesPanel> linePanels=new LinkedHashMap<>();
 		JTabbedPane tabs=new JTabbedPane();
+		JToggleButton subcategories=new JToggleButton();
+		subcategories.setSelected(!options.mainCategoriesOnly());
+		JToggleButton allHistory=new JToggleButton();
+		allHistory.setSelected(false);
+		JSpinner months=new JSpinner(new SpinnerNumberModel(defaultChartMonths,1,120,1));
+		JToggleButton partialMonth=new JToggleButton();
+		partialMonth.setSelected(false);
+		boolean[] firstBuild= {true};
+		Runnable redraw=()-> {
+			ChartSelection selection=new ChartSelection(subcategories.isSelected(),allHistory.isSelected(),
+					(Integer)months.getValue(),partialMonth.isSelected());
+			setToggleText(subcategories,"Subcategories");
+			setToggleText(allHistory,"All history");
+			setToggleText(partialMonth,"Partial month");
+			months.setEnabled(!selection.allHistory());
+			rebuildCharts(tabs,all,selection,removed,linePanels,firstBuild[0]);
+			firstBuild[0]=false;
+		};
+		subcategories.addActionListener(_-> {
+			removed.clear();
+			redraw.run();
+		});
+		allHistory.addActionListener(_->redraw.run());
+		partialMonth.addActionListener(_->redraw.run());
+		months.addChangeListener(_->redraw.run());
+		redraw.run();
+		JButton resume=new JButton("Resume where I left off");
+		resume.addActionListener(_-> {
+			for(RemovedSeries item:loadRemovedCategories(removedCategoriesFile)) {
+				if(item.pane().equals("*")) {
+					for(TimeSeriesPanel panel:linePanels.values())
+						panel.removeCategory(item.category());
+				} else {
+					TimeSeriesPanel panel=linePanels.get(item.pane());
+					if(panel!=null) panel.removeCategory(item.category());
+				}
+			}
+		});
+		JPanel toolbar=new JPanel(new FlowLayout(FlowLayout.LEFT));
+		toolbar.add(subcategories);
+		toolbar.add(allHistory);
+		toolbar.add(new JLabel("Months:"));
+		toolbar.add(months);
+		toolbar.add(partialMonth);
+		toolbar.add(resume);
+		Font controlFont=new Font(Font.SANS_SERIF,Font.PLAIN,16);
+		for(Component component:toolbar.getComponents())
+			component.setFont(controlFont);
+		months.setPreferredSize(new Dimension(72,32));
+		frame.add(toolbar,BorderLayout.NORTH);
+		Runtime.getRuntime().addShutdownHook(new Thread(()->saveRemovedCategories(removed,removedCategoriesFile)));
+		frame.add(tabs,BorderLayout.CENTER);
+		Rectangle scr=java.awt.GraphicsEnvironment.getLocalGraphicsEnvironment().getMaximumWindowBounds();
+		frame.setSize(Math.min(1100,scr.width),Math.min(850,scr.height));
+		frame.setLocationRelativeTo(null);
+		frame.setVisible(true);
+		TimeSeriesPanel.closeAfter(frame,5);
+	}
+	private static void setToggleText(JToggleButton toggle,String label) {
+		toggle.setText(label+" "+(toggle.isSelected()?"ON":"OFF"));
+	}
+	private static void rebuildCharts(JTabbedPane tabs,List<Transaction> all,ChartSelection selection,
+			Set<RemovedSeries> removed,Map<String,TimeSeriesPanel> linePanels,boolean printReasons) {
+		LocalDate earliestDate=chartStartDate(selection);
+		List<Transaction> detailedSpending=toSpendingTransactions(all,earliestDate,selection.includePartialMonth());
+		List<Transaction> transactions=selection.subcategories()?detailedSpending:mainCategories(detailedSpending);
+		List<Transaction> cashFlow=cashFlowTransactions(all,detailedSpending,earliestDate,selection.includePartialMonth());
+		List<CategoryTotal> totals=categoryTotals(transactions);
+		int selectedTab=tabs.getSelectedIndex();
+		tabs.removeAll();
+		linePanels.clear();
 		tabs.addTab("By Category",new JScrollPane(new BarChartPanel(totals)));
 		tabs.addTab("Over Time",track("Over Time",new TimeSeriesPanel(transactions,totals),removed,linePanels));
 		tabs.addTab("Income & Spending",track("Income & Spending",new TimeSeriesPanel(cashFlow,
@@ -655,7 +748,8 @@ public final class SpendingPlot {
 				default -> omittedDeviation.add(d.category());
 			}
 			bucketOf.put(d.category(),bucket);
-			System.out.printf(Locale.US,"%-9s %-30s %s%n",bucket,d.category(),why);
+			if(printReasons)
+				System.out.printf(Locale.US,"%-9s %-30s %s%n",bucket,d.category(),why);
 		}
 		tabs.addTab("Std Dev",new StdDevPanel(deviations,bucketOf));
 		tabs.addTab("High Deviation",track("High Deviation",deviationPanel(transactions,highDeviation),removed,linePanels));
@@ -674,35 +768,17 @@ public final class SpendingPlot {
 		}
 		tabs.addTab("Total Deviation",track("Total Deviation",
 				new TimeSeriesPanel(totalTxns,List.of(new CategoryTotal("Total",grand)),true),removed,linePanels));
-		// Toolbar with a button to re-hide the categories removed last time.
-		JButton resume=new JButton("Resume where I left off");
-		resume.addActionListener(_-> {
-			for(RemovedSeries item:loadRemovedCategories(removedCategoriesFile)) {
-				if(item.pane().equals("*")) {
-					for(TimeSeriesPanel panel:linePanels.values())
-						panel.removeCategory(item.category());
-				} else {
-					TimeSeriesPanel panel=linePanels.get(item.pane());
-					if(panel!=null) panel.removeCategory(item.category());
-				}
+		for(RemovedSeries item:new ArrayList<>(removed)) {
+			if(item.pane().equals("*")) {
+				for(TimeSeriesPanel panel:linePanels.values())
+					panel.removeCategory(item.category());
+			} else {
+				TimeSeriesPanel panel=linePanels.get(item.pane());
+				if(panel!=null) panel.removeCategory(item.category());
 			}
-		});
-		JPanel toolbar=new JPanel(new FlowLayout(FlowLayout.LEFT));
-		toolbar.add(resume);
-		frame.add(toolbar,BorderLayout.NORTH);
-		// Persist the removed set however the app exits (manual close or
-		// timer).
-		Runtime.getRuntime().addShutdownHook(new Thread(()->saveRemovedCategories(removed,removedCategoriesFile)));
-		frame.add(tabs,BorderLayout.CENTER);
-		// Cap to the usable screen area (excludes the Windows taskbar) so the
-		// bottom of the plots -- the date axis -- is never pushed off screen.
-		Rectangle scr=java.awt.GraphicsEnvironment.getLocalGraphicsEnvironment().getMaximumWindowBounds();
-		int wantH=Math.max(500,60+totals.size()*34);
-		frame.setSize(Math.min(960,scr.width),Math.min(wantH,scr.height));
-		frame.setLocationRelativeTo(null);
-		frame.setVisible(true);
-		TimeSeriesPanel.closeAfter(frame,5); // auto-close the window after 5
-												// minutes
+		}
+		if(selectedTab>=0)
+			tabs.setSelectedIndex(Math.min(selectedTab,tabs.getTabCount()-1));
 	}
 	/** Builds a deviation-from-mean chart limited to the given categories. */
 	private static TimeSeriesPanel deviationPanel(List<Transaction> transactions,Set<String> keep) {
@@ -1362,12 +1438,11 @@ public final class SpendingPlot {
 		}
 		List<Transaction> detailedSpending=toSpendingTransactions(all,options.includePartialMonth());
 		List<Transaction> spending=options.mainCategoriesOnly()?mainCategories(detailedSpending):detailedSpending;
-		List<Transaction> cashFlow=cashFlowTransactions(all,detailedSpending,options.includePartialMonth());
 		List<CategoryTotal> totals=categoryTotals(spending);
 		List<CategoryDeviation> deviations=categoryMonthlyDeviations(spending);
 		List<RecurringCandidate> recurring=findRecurringCandidates(spending);
 		totals.forEach(ct->System.out.printf(Locale.US,"%-30s %,12.2f%n",ct.category(),ct.total()));
-		SwingUtilities.invokeLater(()->showCharts(csv.getFileName().toString(),spending,totals,cashFlow));
+		SwingUtilities.invokeLater(()->showCharts(csv.getFileName().toString(),all,options));
 		List<CheckEntry> checks=findUncategorizedChecks(all);
 		printUncategorizedChecks(checks);
 		writeUncategorizedChecks(checks,uncategorizedChecksOutput);
@@ -1401,6 +1476,7 @@ public final class SpendingPlot {
 	private static final int reversalMaxDays=3;
 	private static final Pattern reversalPayee=Pattern.compile("(?i)\\b(adj|adjustment|adjusted|reversal|reversed|refund|credit)\\b");
 	private static final Map<String,String> merchantCreditCategories=Map.of("amazon","Shopping","temu","Shopping","walmart","Shopping");
+	private static final int defaultChartMonths=12;
 	/** Max distinct category lines drawn on the time chart; the rest =
 	 * "Other". */
 	private static final int maxSeries=100;
@@ -1455,3 +1531,4 @@ public final class SpendingPlot {
 																				// 2026"
 			"M/d/yyyy","MM/dd/yyyy","M/d/yy","MM/dd/yy","yyyy/M/d","M-d-yyyy","MM-dd-yyyy","d-MMM-yyyy","d MMM yyyy"};
 }
+
