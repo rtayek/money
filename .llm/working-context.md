@@ -92,8 +92,9 @@ live in `doc/patterns.md` -- read it for any task touching `SpendingPlot`,
   2026-09-28 -- no longer materialized here at all. This supersedes the
   earlier "materialized from symlinks into real files" decision, and
   retires the ASCII-vs-em-dash disagreement between them as moot.
-- `UncategorizedCheckReport.java` deleted 2026-09-21 -- confirmed redundant
-  with `SpendingPlot`'s own equivalents.
+- `UncategorizedCheckReport.java` remains available as a focused report. Its
+  default output was corrected on 2026-10-02 to
+  `reports/uncategorized-checks.csv`, matching the active report location.
 - AI/software subscriptions (ChatGPT, OpenAI, OpenRouter, Quicken,
   Claude/Anthropic, GitHub, Coursera, AI Sensei) categorize to
   `Utilities:Internet & Cable`. Ray confirmed this on 2026-09-16.
@@ -114,18 +115,13 @@ live in `doc/patterns.md` -- read it for any task touching `SpendingPlot`,
   now -- a deliberate simplification, not a claim these all belong there
   conceptually (YouTube Premium in particular is entertainment). $3.99/
   $5.99 still have nothing to categorize until identified.
-- `index.md` is the shared dotmdfiles template and stays identical across
-  all of Ray's projects -- project-specific pointers belong here in
-  `working-context.md` instead. Ray confirmed this 2026-09-21.
+- The shared `.llm/index.md` discovery model was retired. `AGENTS.md` is now
+  self-contained and names this working context only when current Money work
+  requires it.
 - Amazon item-level categorization: no longer blocked. Ray obtained his
   order-history export and `AmazonTransactionReview` (see Current state)
   now does the matching. Originally deferred pending the export; that
   block is resolved as of 2026-09-28.
-
-## Open questions
-
-- `UncategorizedCheckReport.java` is still in `src/money/`, although the
-  Decisions section says it was deleted 2026-09-21.
 
 ## Deferred
 
