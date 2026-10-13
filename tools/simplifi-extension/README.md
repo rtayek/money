@@ -3,7 +3,8 @@
 This unpacked Chrome extension inspects the visible Quicken Simplifi page. It
 does not edit transactions, read files, store data, or make network requests.
 Its diagnostic report masks free-form text, dates, amounts, email addresses,
-and long numbers while retaining DOM structure and common transaction labels.
+and long numbers while retaining DOM structure, grid column names, and common
+transaction labels.
 
 ## Install
 
@@ -21,7 +22,8 @@ and long numbers while retaining DOM structure and common transaction labels.
 4. Use **Copy report** when the adapter needs diagnosis.
 
 Only the visible DOM is scanned. Virtualized rows outside the viewport are not
-included. The next stage will use the resulting structure to match exported
+included. Version 0.2 reports the sanitized column structure within each visible
+row. The next stage will use the resulting structure to match exported
 transactions. Editing stays disabled until read-only matching has been tested
 against real Simplifi pages.
 

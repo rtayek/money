@@ -29,11 +29,27 @@
       .slice(0, limit);
   }
 
+  function cellsIn(element) {
+    return Array.from(element.querySelectorAll("[role='gridcell'], [role='cell'], [role='columnheader'], [data-field]"))
+      .filter(isVisible)
+      .map(simplifiProbe.describeCell);
+  }
+
+  function describeRow(row) {
+    return {
+      ...simplifiProbe.describeElement(row),
+      rowIndex: row.getAttribute("data-rowindex") || "",
+      hasDataId: row.hasAttribute("data-id"),
+      cells: cellsIn(row)
+    };
+  }
+
   function scan() {
     const rows = uniqueVisible(rowSelector, 100);
     const controls = uniqueVisible(controlSelector, 150);
+    const headers = uniqueVisible("[role='columnheader']", 50);
     return {
-      probeVersion: "0.1.0",
+      probeVersion: "0.2.0",
       capturedAt: new Date().toISOString(),
       page: {
         origin: location.origin,
@@ -42,9 +58,11 @@
       },
       counts: {
         rowCandidates: rows.length,
-        controls: controls.length
+        controls: controls.length,
+        columnHeaders: headers.length
       },
-      rows: rows.map(simplifiProbe.describeElement),
+      headers: headers.map(simplifiProbe.describeCell),
+      rows: rows.map(describeRow),
       controls: controls.map(simplifiProbe.describeElement)
     };
   }

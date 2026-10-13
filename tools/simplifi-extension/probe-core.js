@@ -48,7 +48,24 @@
     };
   }
 
-  const api = { describeElement, sanitizeText, shortClasses };
+  function safeFieldName(value) {
+    if (!value) return "";
+    return /^[a-z][a-z0-9-]{0,60}$/i.test(value) ? value : "<field>";
+  }
+
+  function describeCell(element) {
+    return {
+      tag: element.tagName.toLowerCase(),
+      role: element.getAttribute("role") || "",
+      field: safeFieldName(element.getAttribute("data-field")),
+      columnIndex: element.getAttribute("aria-colindex") || "",
+      ariaLabel: sanitizeText(element.getAttribute("aria-label")),
+      text: sanitizeText(element.innerText || element.value || ""),
+      classes: shortClasses(element.className)
+    };
+  }
+
+  const api = { describeCell, describeElement, safeFieldName, sanitizeText, shortClasses };
   root.simplifiProbe = api;
   if (typeof module !== "undefined" && module.exports) module.exports = api;
 })(globalThis);
