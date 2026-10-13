@@ -1,0 +1,18 @@
+{
+  "manifest_version": 3,
+  "name": "Simplifi Transaction Probe",
+  "version": "0.1.0",
+  "description": "Inspects the visible Simplifi transaction page without changing it.",
+  "permissions": ["activeTab"],
+  "action": {
+    "default_title": "Simplifi Transaction Probe",
+    "default_popup": "popup.html"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://simplifi.quicken.com/*"],
+      "js": ["probe-core.js", "content.js"],
+      "run_at": "document_idle"
+    }
+  ]
+}

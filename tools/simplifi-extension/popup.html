@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Simplifi Transaction Probe</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <h1>Simplifi probe</h1>
+  <p>Open Simplifi's Transactions page, then scan the visible page. Nothing is changed or transmitted.</p>
+  <div class="actions">
+    <button id="scan">Scan visible page</button>
+    <button id="copy" disabled>Copy report</button>
+  </div>
+  <p id="status" role="status">Ready.</p>
+  <pre id="report" aria-label="Sanitized probe report"></pre>
+  <script src="popup.js"></script>
+</body>
+</html>
