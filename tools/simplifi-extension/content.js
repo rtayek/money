@@ -65,25 +65,29 @@
   }
 
   function clearMatchMarks() {
-    document.querySelectorAll("[data-simplifi-match]").forEach(row => {
-      row.style.removeProperty("outline");
-      row.style.removeProperty("outline-offset");
-      row.removeAttribute("data-simplifi-match");
-    });
+    document.querySelector("#simplifi-match-styles")?.remove();
   }
 
-  function markMatches(results, rowsByKey) {
+  function markMatches(results) {
     clearMatchMarks();
-    const colors = { exact: "#00e676", probable: "#ffd400", ambiguous: "#ff5252" };
+    const colors = { exact: "#00ff66", probable: "#ffe600", ambiguous: "#ff1744" };
+    const rules = [];
     for (const result of results) {
       for (const match of result.rows) {
-        const row = rowsByKey.get(match.rowKey);
-        if (!row || !colors[result.status]) continue;
-        row.dataset.simplifiMatch = result.status;
-        row.style.outline = `4px solid ${colors[result.status]}`;
-        row.style.outlineOffset = "-4px";
+        if (!match.rowKey || !colors[result.status]) continue;
+        const escapedId = CSS.escape(match.rowKey);
+        rules.push(`[role='row'][data-id='${escapedId}'] {` +
+          `outline: 6px solid ${colors[result.status]} !important;` +
+          "outline-offset: -6px !important;" +
+          `box-shadow: inset 0 0 0 3px ${colors[result.status]} !important;` +
+          "}");
       }
     }
+    if (!rules.length) return;
+    const styles = document.createElement("style");
+    styles.id = "simplifi-match-styles";
+    styles.textContent = rules.join("\n");
+    document.documentElement.append(styles);
   }
 
   function scan() {
@@ -91,7 +95,7 @@
     const controls = uniqueVisible(controlSelector, 150);
     const headers = uniqueVisible("[role='columnheader']", 50);
     return {
-      probeVersion: "0.2.0",
+      probeVersion: "0.3.1",
       capturedAt: new Date().toISOString(),
       page: {
         origin: location.origin,
@@ -114,10 +118,9 @@
       sendResponse({ ok: true, report: scan() });
     } else if (message && message.type === "simplifi-match-visible") {
       const transactions = visibleTransactions();
-      const rowsByKey = new Map(transactions.map(transaction => [transaction.rowKey, transaction.row]));
       const safeRows = transactions.map(({ row, ...transaction }) => transaction);
       const results = simplifiMatcher.classifyMatches(message.targets, safeRows);
-      markMatches(results, rowsByKey);
+      markMatches(results);
       sendResponse({
         ok: true,
         visibleRows: transactions.length,

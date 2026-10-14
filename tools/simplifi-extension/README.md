@@ -31,13 +31,15 @@ Simplifi pages.
 1. In Simplifi, filter Transactions to one payee such as **Google**.
 2. Open the extension and choose `all-annotated.csv`.
 3. Enter the same payee filter and choose **Match visible rows**.
-4. Review the totals and temporary row outlines: green is exact, yellow is a
+4. Review the totals and row outlines: green is exact, yellow is a
    unique date/payee/amount match with an account-name mismatch, and red is
    ambiguous.
 
 The CSV is parsed in memory inside the extension and is never uploaded or
 stored. Matching uses date, account, payee, and absolute amount. The extension
 does not write notes or click Simplifi controls in version 0.3.
+Outlines are tied to transaction IDs, so scrolling cannot transfer a mark to a
+different virtualized row.
 
 Run the deterministic sanitizer checks with:
 
