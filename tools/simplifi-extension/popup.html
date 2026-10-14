@@ -15,6 +15,20 @@
   </div>
   <p id="status" role="status">Ready.</p>
   <pre id="report" aria-label="Sanitized probe report"></pre>
+  <hr>
+  <h2>Match annotated CSV</h2>
+  <p>Filter Simplifi to the same payee first. Matching remains read-only.</p>
+  <label for="csv">Annotated CSV</label>
+  <input id="csv" type="file" accept=".csv,text/csv">
+  <label for="payeeFilter">Payee contains</label>
+  <input id="payeeFilter" type="text" value="Google">
+  <div class="actions">
+    <button id="match" disabled>Match visible rows</button>
+    <button id="clear">Clear marks</button>
+  </div>
+  <p id="matchStatus" role="status">Choose all-annotated.csv.</p>
+  <pre id="matchReport" aria-label="CSV match report"></pre>
+  <script src="matcher-core.js"></script>
   <script src="popup.js"></script>
 </body>
 </html>

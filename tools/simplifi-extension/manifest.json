@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "Simplifi Transaction Probe",
-  "version": "0.2.0",
-  "description": "Inspects the visible Simplifi transaction page without changing it.",
+  "version": "0.3.0",
+  "description": "Inspects and locally matches exported Simplifi transactions without changing them.",
   "permissions": ["activeTab"],
   "action": {
     "default_title": "Simplifi Transaction Probe",
@@ -11,7 +11,7 @@
   "content_scripts": [
     {
       "matches": ["https://simplifi.quicken.com/*"],
-      "js": ["probe-core.js", "content.js"],
+      "js": ["probe-core.js", "matcher-core.js", "content.js"],
       "run_at": "document_idle"
     }
   ]

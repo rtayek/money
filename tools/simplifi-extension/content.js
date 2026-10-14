@@ -44,6 +44,48 @@
     };
   }
 
+  function cellText(row, field) {
+    const cell = row.querySelector(`[role='gridcell'][data-field='${field}']`);
+    return cell ? (cell.innerText || cell.textContent || "").trim() : "";
+  }
+
+  function visibleTransactions() {
+    return uniqueVisible("[role='row'][data-rowindex]", 250)
+      .filter(row => row.querySelector("[role='gridcell'][data-field='payee']"))
+      .map(row => ({
+        rowKey: row.getAttribute("data-id"),
+        row,
+        date: cellText(row, "date"),
+        account: cellText(row, "account"),
+        payee: cellText(row, "payee"),
+        category: cellText(row, "category"),
+        notes: cellText(row, "notes"),
+        amount: cellText(row, "amount")
+      }));
+  }
+
+  function clearMatchMarks() {
+    document.querySelectorAll("[data-simplifi-match]").forEach(row => {
+      row.style.removeProperty("outline");
+      row.style.removeProperty("outline-offset");
+      row.removeAttribute("data-simplifi-match");
+    });
+  }
+
+  function markMatches(results, rowsByKey) {
+    clearMatchMarks();
+    const colors = { exact: "#00e676", probable: "#ffd400", ambiguous: "#ff5252" };
+    for (const result of results) {
+      for (const match of result.rows) {
+        const row = rowsByKey.get(match.rowKey);
+        if (!row || !colors[result.status]) continue;
+        row.dataset.simplifiMatch = result.status;
+        row.style.outline = `4px solid ${colors[result.status]}`;
+        row.style.outlineOffset = "-4px";
+      }
+    }
+  }
+
   function scan() {
     const rows = uniqueVisible(rowSelector, 100);
     const controls = uniqueVisible(controlSelector, 150);
@@ -70,6 +112,21 @@
   chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     if (message && message.type === "simplifi-probe-scan") {
       sendResponse({ ok: true, report: scan() });
+    } else if (message && message.type === "simplifi-match-visible") {
+      const transactions = visibleTransactions();
+      const rowsByKey = new Map(transactions.map(transaction => [transaction.rowKey, transaction.row]));
+      const safeRows = transactions.map(({ row, ...transaction }) => transaction);
+      const results = simplifiMatcher.classifyMatches(message.targets, safeRows);
+      markMatches(results, rowsByKey);
+      sendResponse({
+        ok: true,
+        visibleRows: transactions.length,
+        counts: Object.fromEntries(["exact", "probable", "ambiguous", "missing"]
+          .map(status => [status, results.filter(result => result.status === status).length]))
+      });
+    } else if (message && message.type === "simplifi-clear-matches") {
+      clearMatchMarks();
+      sendResponse({ ok: true });
     }
   });
 })();
