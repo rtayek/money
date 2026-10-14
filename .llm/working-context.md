@@ -95,9 +95,10 @@ live in `doc/patterns.md` -- read it for any task touching `SpendingPlot`,
 - `UncategorizedCheckReport.java` remains available as a focused report. Its
   default output was corrected on 2026-10-02 to
   `reports/uncategorized-checks.csv`, matching the active report location.
-- AI/software subscriptions (ChatGPT, OpenAI, OpenRouter, Quicken,
-  Claude/Anthropic, GitHub, Coursera, AI Sensei) categorize to
-  `Utilities:Internet & Cable`. Ray confirmed this on 2026-09-16.
+- Category policy changed 2026-10-12: reserve `Utilities:Internet & Cable`
+  for actual internet-provider service. This supersedes the 2026-09-16
+  decision that assigned AI/software subscriptions there. Replacement
+  categories for non-Google AI/software subscriptions remain to be reviewed.
 - The recurring $19.99/month "Google" charge is **Google AI Pro (5 TB)**
   (package `com.google.android.apps.subscriptions.red`), confirmed from
   Ray's Play Store order history on 2026-09-19. Same subscription
@@ -110,11 +111,11 @@ live in `doc/patterns.md` -- read it for any task touching `SpendingPlot`,
   - $13.99 / $15.99 = YouTube Premium individual plan (price increased
     over time). Plausible, not independently confirmed.
   - $3.99 / $5.99 = still unidentified.
-- Google charge categorization, decided 2026-09-21: $19.99, $1.99, $2.99,
-  $13.99, and $15.99 all categorize to `Utilities:Internet & Cable` for
-  now -- a deliberate simplification, not a claim these all belong there
-  conceptually (YouTube Premium in particular is entertainment). $3.99/
-  $5.99 still have nothing to categorize until identified.
+- Google charge categorization, decided 2026-10-12: all identified Google
+  subscriptions categorize to `Entertainment` for now. This includes the
+  identified $19.99, $1.99, $2.99, $13.99, and $15.99 amounts and supersedes
+  their earlier `Utilities:Internet & Cable` mapping. Unidentified Google
+  amounts remain `Uncategorized` and marked `needs review`.
 - The shared `.llm/index.md` discovery model was retired. `AGENTS.md` is now
   self-contained and names this working context only when current Money work
   requires it.
