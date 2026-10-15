@@ -101,7 +101,7 @@
     const controls = Array.from(root.querySelectorAll("input, textarea, select, button"))
       .filter(isVisible);
     return {
-      probeVersion: "0.7.1",
+      probeVersion: "0.7.2",
       root: {
         tag: root.tagName.toLowerCase(),
         role: root.getAttribute("role") || "",
@@ -216,7 +216,10 @@
   }
 
   async function closeTransaction(root) {
-    const close = root.querySelector("button[aria-label='close']");
+    const dialog = root.closest("[role='dialog']") || root;
+    const close = dialog.querySelector(
+      "button[aria-label='close' i], button[aria-label^='close ' i]"
+    );
     if (!close) throw new Error("The transaction editor Close button was not found.");
     close.click();
     await waitUntil(
@@ -425,7 +428,7 @@
     const controls = uniqueVisible(controlSelector, 150);
     const headers = uniqueVisible("[role='columnheader']", 50);
     return {
-      probeVersion: "0.7.1",
+      probeVersion: "0.7.2",
       capturedAt: new Date().toISOString(),
       page: {
         origin: location.origin,

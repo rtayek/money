@@ -67,6 +67,9 @@ does not write notes or click Simplifi controls in version 0.4.
 Outlines are tied to transaction IDs, so scrolling cannot transfer a mark to a
 different virtualized row.
 
+Version 0.7.2 locates Close in the surrounding transaction dialog when
+Simplifi renders it outside the editor's inner form.
+
 Run the deterministic sanitizer checks with:
 
 ```sh
