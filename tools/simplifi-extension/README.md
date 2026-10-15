@@ -21,6 +21,10 @@ transaction labels.
 3. Confirm that it found row candidates and controls.
 4. Use **Copy report** when the adapter needs diagnosis.
 
+With a transaction details panel open, **Inspect open transaction** produces a
+small read-only report of that editor's labels and controls. It never includes
+field values and does not click, type, or submit anything.
+
 The basic scan only reads the visible DOM. Version 0.4 can also sweep through a
 filtered, virtualized transaction grid to compare an annotated export with all
 of the rows in that filtered view. Editing stays disabled until read-only

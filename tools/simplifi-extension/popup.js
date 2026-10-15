@@ -30,6 +30,26 @@ async function scan() {
   }
 }
 
+async function inspectEditor() {
+  const status = document.querySelector("#status");
+  const output = document.querySelector("#report");
+  const copy = document.querySelector("#copy");
+  status.textContent = "Inspecting open transaction...";
+  output.textContent = "";
+  copy.disabled = true;
+  try {
+    const tab = await activeTab();
+    const response = await chrome.tabs.sendMessage(tab.id, { type: "simplifi-inspect-editor" });
+    if (!response || !response.ok) throw new Error(response?.error || "The Simplifi page did not answer.");
+    reportText = JSON.stringify(response.report, null, 2);
+    output.textContent = reportText;
+    copy.disabled = false;
+    status.textContent = `${response.report.controlCount} editor controls found; nothing changed.`;
+  } catch (error) {
+    status.textContent = error.message;
+  }
+}
+
 async function copyReport() {
   await navigator.clipboard.writeText(reportText);
   document.querySelector("#status").textContent = "Sanitized report copied.";
@@ -134,6 +154,7 @@ async function clearMatches() {
 }
 
 document.querySelector("#scan").addEventListener("click", scan);
+document.querySelector("#inspectEditor").addEventListener("click", inspectEditor);
 document.querySelector("#copy").addEventListener("click", copyReport);
 document.querySelector("#csv").addEventListener("change", loadCsv);
 document.querySelector("#match").addEventListener("click", matchVisibleRows);

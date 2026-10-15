@@ -44,6 +44,65 @@
     };
   }
 
+  function associatedLabel(control) {
+    const labels = [];
+    const labelledBy = (control.getAttribute("aria-labelledby") || "").split(/\s+/).filter(Boolean);
+    for (const id of labelledBy) {
+      const label = document.getElementById(id);
+      if (label) labels.push(label.innerText || label.textContent || "");
+    }
+    for (const label of Array.from(control.labels || [])) {
+      labels.push(label.innerText || label.textContent || "");
+    }
+    const enclosingLabel = control.closest("label");
+    if (enclosingLabel) labels.push(enclosingLabel.innerText || enclosingLabel.textContent || "");
+
+    let ancestor = control.parentElement;
+    for (let depth = 0; ancestor && depth < 5; depth++, ancestor = ancestor.parentElement) {
+      const label = ancestor.querySelector(":scope > label, :scope > legend, :scope > .MuiFormLabel-root");
+      if (label) labels.push(label.innerText || label.textContent || "");
+    }
+    return simplifiProbe.sanitizeText(Array.from(new Set(labels)).join(" "));
+  }
+
+  function describeEditorControl(control, index) {
+    return {
+      index,
+      tag: control.tagName.toLowerCase(),
+      role: control.getAttribute("role") || "",
+      type: control.getAttribute("type") || "",
+      label: associatedLabel(control),
+      ariaLabel: simplifiProbe.sanitizeText(control.getAttribute("aria-label")),
+      placeholder: simplifiProbe.sanitizeText(control.getAttribute("placeholder")),
+      name: simplifiProbe.safeFieldName(control.getAttribute("name")),
+      text: simplifiProbe.sanitizeText(control.innerText || ""),
+      valueState: "value" in control && control.value ? "nonempty" : "empty",
+      readOnly: Boolean(control.readOnly),
+      disabled: Boolean(control.disabled),
+      classes: simplifiProbe.shortClasses(control.className)
+    };
+  }
+
+  function inspectOpenEditor() {
+    const textareas = uniqueVisible("textarea", 20);
+    const roots = textareas.map(textarea => textarea.closest("form")).filter(Boolean);
+    const root = roots.find(form => form.querySelector("button[type='submit']")) ||
+      textareas[0]?.closest("[role='dialog'], aside, [class*='Drawer']") || null;
+    if (!root) throw new Error("Open a transaction details panel first.");
+    const controls = Array.from(root.querySelectorAll("input, textarea, select, button"))
+      .filter(isVisible);
+    return {
+      probeVersion: "0.5.0",
+      root: {
+        tag: root.tagName.toLowerCase(),
+        role: root.getAttribute("role") || "",
+        classes: simplifiProbe.shortClasses(root.className)
+      },
+      controlCount: controls.length,
+      controls: controls.map(describeEditorControl)
+    };
+  }
+
   function cellText(row, field) {
     const cell = row.querySelector(`[role='gridcell'][data-field='${field}']`);
     return cell ? (cell.innerText || cell.textContent || "").trim() : "";
@@ -188,7 +247,7 @@
     const controls = uniqueVisible(controlSelector, 150);
     const headers = uniqueVisible("[role='columnheader']", 50);
     return {
-      probeVersion: "0.4.2",
+      probeVersion: "0.5.0",
       capturedAt: new Date().toISOString(),
       page: {
         origin: location.origin,
@@ -209,6 +268,12 @@
   chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     if (message && message.type === "simplifi-probe-scan") {
       sendResponse({ ok: true, report: scan() });
+    } else if (message && message.type === "simplifi-inspect-editor") {
+      try {
+        sendResponse({ ok: true, report: inspectOpenEditor() });
+      } catch (error) {
+        sendResponse({ ok: false, error: error.message });
+      }
     } else if (message && message.type === "simplifi-match-visible") {
       const transactions = visibleTransactions();
       const safeRows = transactions.map(transactionSnapshot);
