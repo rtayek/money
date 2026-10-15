@@ -56,4 +56,13 @@ assert.deepEqual(matcher.mergeNote("original note", "recommended category: Enter
 });
 assert.equal(matcher.mergeNote("recommended category: Entertainment", "recommended category: Entertainment").changed, false);
 
+const candidates = matcher.exactMatchCandidates([
+  { csvRow: 2, date: "10/13/2026", account: "Card 1234", payee: "Google", amount: "19.99" },
+  { csvRow: 3, date: "10/12/2026", account: "Card 1234", payee: "Google", amount: "1.99" }
+], [
+  { rowKey: "one", date: "Oct 13, 2026", account: "Card 1234", payee: "Google", amount: "$19.99" },
+  { rowKey: "two", date: "Oct 12, 2026", account: "Card 1234", payee: "Google", amount: "$1.99" }
+], 1);
+assert.deepEqual(candidates.map(candidate => candidate.target.csvRow), [2]);
+
 console.log("matcher-core tests passed");

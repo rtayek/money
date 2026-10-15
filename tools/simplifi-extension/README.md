@@ -31,6 +31,12 @@ one date/account/payee/amount match, preserves or appends to an existing Note,
 and fills the Note field. It never clicks **Update**; the human must inspect the
 field and decide whether to save or close the editor.
 
+Version 0.7 adds an explicitly confirmed batch limited to five visible exact
+matches. It preserves existing Notes, skips annotations already present, saves
+one transaction at a time, reopens each saved transaction to verify the full
+annotation, and stops on the first unexpected UI or matching condition. It
+does not change categories or process probable, ambiguous, or missing matches.
+
 The basic scan only reads the visible DOM. Version 0.4 can also sweep through a
 filtered, virtualized transaction grid to compare an annotated export with all
 of the rows in that filtered view. Editing stays disabled until read-only

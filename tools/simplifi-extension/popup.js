@@ -61,6 +61,7 @@ async function loadCsv(event) {
   const match = document.querySelector("#match");
   const sweep = document.querySelector("#sweep");
   const prepare = document.querySelector("#prepareNote");
+  const batch = document.querySelector("#applyFive");
   if (!file) return;
   try {
     csvRecords = simplifiMatcher.recordsFromCsv(await file.text());
@@ -71,12 +72,14 @@ async function loadCsv(event) {
     match.disabled = false;
     sweep.disabled = false;
     prepare.disabled = false;
+    batch.disabled = false;
     status.textContent = `${csvRecords.length} CSV rows loaded.`;
   } catch (error) {
     csvRecords = [];
     match.disabled = true;
     sweep.disabled = true;
     prepare.disabled = true;
+    batch.disabled = true;
     status.textContent = error.message;
   }
 }
@@ -182,6 +185,44 @@ async function prepareOpenNote() {
   }
 }
 
+async function applyFiveVisibleNotes() {
+  const confirmed = confirm(
+    "Save Notes for up to five visible exact matches? Existing Notes are preserved. The batch stops on any unexpected condition."
+  );
+  if (!confirmed) return;
+  const status = document.querySelector("#matchStatus");
+  const output = document.querySelector("#matchReport");
+  const batch = document.querySelector("#applyFive");
+  batch.disabled = true;
+  status.textContent = "Applying and verifying up to five exact Notes...";
+  output.textContent = "";
+  try {
+    const tab = await activeTab();
+    const response = await chrome.tabs.sendMessage(tab.id, {
+      type: "simplifi-apply-visible-notes",
+      targets: filteredTargets()
+    });
+    if (!response || !response.ok) {
+      throw new Error(response?.error || "The Simplifi page did not answer.");
+    }
+    const report = {
+      selectedCsvRows: response.selectedCsvRows,
+      savedCsvRows: response.savedCsvRows,
+      alreadyPresentCsvRows: response.alreadyPresentCsvRows,
+      completed: response.completed,
+      error: response.error || ""
+    };
+    output.textContent = JSON.stringify(report, null, 2);
+    status.textContent = response.completed
+      ? `Batch complete: ${response.savedCsvRows.length} saved and ${response.alreadyPresentCsvRows.length} already present.`
+      : `Batch stopped after ${response.savedCsvRows.length} verified saves: ${response.error}`;
+  } catch (error) {
+    status.textContent = error.message;
+  } finally {
+    batch.disabled = csvRecords.length === 0;
+  }
+}
+
 async function clearMatches() {
   const tab = await activeTab();
   await chrome.tabs.sendMessage(tab.id, { type: "simplifi-clear-matches" });
@@ -195,4 +236,5 @@ document.querySelector("#csv").addEventListener("change", loadCsv);
 document.querySelector("#match").addEventListener("click", matchVisibleRows);
 document.querySelector("#sweep").addEventListener("click", sweepFilteredRows);
 document.querySelector("#prepareNote").addEventListener("click", prepareOpenNote);
+document.querySelector("#applyFive").addEventListener("click", applyFiveVisibleNotes);
 document.querySelector("#clear").addEventListener("click", clearMatches);

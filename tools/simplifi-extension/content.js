@@ -83,11 +83,15 @@
     };
   }
 
-  function openEditorRoot() {
+  function findOpenEditorRoot() {
     const textareas = uniqueVisible("textarea", 20);
     const roots = textareas.map(textarea => textarea.closest("form")).filter(Boolean);
-    const root = roots.find(form => form.querySelector("button[type='submit']")) ||
+    return roots.find(form => form.querySelector("button[type='submit']")) ||
       textareas[0]?.closest("[role='dialog'], aside, [class*='Drawer']") || null;
+  }
+
+  function openEditorRoot() {
+    const root = findOpenEditorRoot();
     if (!root) throw new Error("Open a transaction details panel first.");
     return root;
   }
@@ -97,7 +101,7 @@
     const controls = Array.from(root.querySelectorAll("input, textarea, select, button"))
       .filter(isVisible);
     return {
-      probeVersion: "0.6.0",
+      probeVersion: "0.7.0",
       root: {
         tag: root.tagName.toLowerCase(),
         role: root.getAttribute("role") || "",
@@ -168,6 +172,102 @@
       preservedExistingNote: Boolean(existingNote) && merged.value.startsWith(existingNote.trimEnd()),
       updateEnabled: Boolean(updateButton && !updateButton.disabled)
     };
+  }
+
+  function waitUntil(check, message, timeout = 6000) {
+    return new Promise((resolve, reject) => {
+      const deadline = Date.now() + timeout;
+      const poll = () => {
+        const value = check();
+        if (value) {
+          resolve(value);
+        } else if (Date.now() >= deadline) {
+          reject(new Error(message));
+        } else {
+          setTimeout(poll, 100);
+        }
+      };
+      poll();
+    });
+  }
+
+  async function openTransaction(rowKey) {
+    const selector = `[role='row'][data-id='${CSS.escape(rowKey)}']`;
+    const row = await waitUntil(() => {
+      const candidate = document.querySelector(selector);
+      return candidate && isVisible(candidate) ? candidate : null;
+    }, "A selected transaction row is no longer visible.");
+    row.click();
+    return waitUntil(
+      () => findOpenEditorRoot(),
+      "The transaction editor did not open."
+    );
+  }
+
+  async function closeTransaction(root) {
+    const close = root.querySelector("button[aria-label='close']");
+    if (!close) throw new Error("The transaction editor Close button was not found.");
+    close.click();
+    await waitUntil(
+      () => !document.contains(root) || !isVisible(root),
+      "The transaction editor did not close."
+    );
+  }
+
+  async function verifySavedNote(rowKey, target) {
+    const root = await openTransaction(rowKey);
+    const note = labelledControl(root, "note", "textarea");
+    if (!note) throw new Error("The saved Note field could not be found for verification.");
+    const verification = simplifiMatcher.mergeNote(note.value, target.notes);
+    if (verification.changed) {
+      throw new Error(`CSV row ${target.csvRow} did not contain the expected saved Note.`);
+    }
+    await closeTransaction(root);
+  }
+
+  async function applyVisibleNotes(targets, limit) {
+    if (findOpenEditorRoot()) throw new Error("Close the open transaction panel before starting the batch.");
+    const transactions = visibleTransactions();
+    const safeRows = transactions.map(transactionSnapshot);
+    const candidates = simplifiMatcher.exactMatchCandidates(targets, safeRows, limit);
+    if (!candidates.length) throw new Error("No exact matched transactions are visible.");
+
+    const report = {
+      selectedCsvRows: candidates.map(candidate => candidate.target.csvRow),
+      savedCsvRows: [],
+      alreadyPresentCsvRows: [],
+      completed: true,
+      error: ""
+    };
+    for (const candidate of candidates) {
+      const target = candidate.target;
+      const rowKey = candidate.rows[0].rowKey;
+      try {
+        const root = await openTransaction(rowKey);
+        const prepared = await prepareOpenNote([target]);
+        if (!prepared.changed) {
+          report.alreadyPresentCsvRows.push(target.csvRow);
+          await closeTransaction(root);
+          continue;
+        }
+        const update = root.querySelector("button[type='submit'].MuiButton-containedPrimary");
+        if (!update || update.disabled) {
+          throw new Error(`Update did not become available for CSV row ${target.csvRow}.`);
+        }
+        update.click();
+        await waitUntil(
+          () => !document.contains(root) || !isVisible(root),
+          `Update did not finish for CSV row ${target.csvRow}.`
+        );
+        await verifySavedNote(rowKey, target);
+        report.savedCsvRows.push(target.csvRow);
+      } catch (error) {
+        report.completed = false;
+        report.error = error.message;
+        break;
+      }
+    }
+    return report;
   }
 
   function cellText(row, field) {
@@ -314,7 +414,7 @@
     const controls = uniqueVisible(controlSelector, 150);
     const headers = uniqueVisible("[role='columnheader']", 50);
     return {
-      probeVersion: "0.6.0",
+      probeVersion: "0.7.0",
       capturedAt: new Date().toISOString(),
       page: {
         origin: location.origin,
@@ -343,6 +443,13 @@
       }
     } else if (message && message.type === "simplifi-prepare-open-note") {
       prepareOpenNote(message.targets).then(result => {
+        sendResponse({ ok: true, ...result });
+      }).catch(error => {
+        sendResponse({ ok: false, error: error.message });
+      });
+      return true;
+    } else if (message && message.type === "simplifi-apply-visible-notes") {
+      applyVisibleNotes(message.targets, 5).then(result => {
         sendResponse({ ok: true, ...result });
       }).catch(error => {
         sendResponse({ ok: false, error: error.message });
