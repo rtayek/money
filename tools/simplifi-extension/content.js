@@ -124,12 +124,29 @@
       }
 
       collectVisibleTransactions();
-      const results = simplifiMatcher.classifyMatches(targets, Array.from(transactions.values()));
+      const scannedTransactions = Array.from(transactions.values());
+      const results = simplifiMatcher.classifyMatches(targets, scannedTransactions);
+      const unmatched = simplifiMatcher.unmatchedDetails(results, scannedTransactions);
       markMatches(results);
       return {
         scannedRows: transactions.size,
         scrollSteps,
         truncated,
+        missingTargets: unmatched.missingTargets.map(target => ({
+          csvRow: target.csvRow,
+          date: target.date,
+          account: target.account,
+          payee: target.payee,
+          amount: target.amount,
+          category: target.category || ""
+        })),
+        unmatchedRows: unmatched.unmatchedRows.map(row => ({
+          date: row.date,
+          account: row.account,
+          payee: row.payee,
+          amount: row.amount,
+          category: row.category
+        })),
         counts: Object.fromEntries(["exact", "probable", "ambiguous", "missing"]
           .map(status => [status, results.filter(result => result.status === status).length]))
       };
@@ -171,7 +188,7 @@
     const controls = uniqueVisible(controlSelector, 150);
     const headers = uniqueVisible("[role='columnheader']", 50);
     return {
-      probeVersion: "0.4.0",
+      probeVersion: "0.4.1",
       capturedAt: new Date().toISOString(),
       page: {
         origin: location.origin,

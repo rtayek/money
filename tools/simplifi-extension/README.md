@@ -39,7 +39,9 @@ Choose **Sweep filtered rows** to read the entire filtered transaction grid.
 Simplifi scrolls temporarily while the extension collects transaction IDs and
 named cells, then returns to the original scroll position. Do not interact with
 the transaction grid during the sweep. The sweep stops after 30 seconds rather
-than continuing indefinitely and reports whether it completed.
+than continuing indefinitely and reports whether it completed. Version 0.4.1
+also lists identifying fields for missing CSV targets and unmatched Simplifi
+rows so they can be reviewed without hunting through the grid.
 
 The CSV is parsed in memory inside the extension and is never uploaded or
 stored. Matching uses date, account, payee, and absolute amount. The extension

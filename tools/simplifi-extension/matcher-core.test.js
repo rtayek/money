@@ -17,4 +17,18 @@ const results = matcher.classifyMatches([
 ]);
 assert.equal(results[0].status, "exact");
 
+const details = matcher.unmatchedDetails([
+  ...results,
+  {
+    status: "missing",
+    target: { csvRow: 12, date: "10/12/2026", payee: "Google", amount: "$3.99" },
+    rows: []
+  }
+], [
+  { rowKey: "one", date: "Oct 13, 2026", payee: "Google", amount: "$19.99" },
+  { rowKey: "two", date: "Oct 12, 2026", payee: "Google", amount: "$3.99" }
+]);
+assert.deepEqual(details.missingTargets.map(target => target.csvRow), [12]);
+assert.deepEqual(details.unmatchedRows.map(row => row.rowKey), ["two"]);
+
 console.log("matcher-core tests passed");

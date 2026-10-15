@@ -69,6 +69,7 @@ function filteredTargets() {
       account: record.Account,
       payee: record.Payee,
       amount: record.Amount,
+      category: record.Category || "",
       notes: record.Notes
     }));
 }
@@ -88,6 +89,8 @@ async function matchVisibleRows() {
       csvTargets: targets.length,
       visibleTransactionRows: response.visibleRows,
       ...response.counts,
+      missingCsvTargets: response.missingTargets,
+      unmatchedSimplifiRows: response.unmatchedRows,
       legend: "green=exact, yellow=probable account mismatch, red=ambiguous"
     };
     output.textContent = JSON.stringify(report, null, 2);

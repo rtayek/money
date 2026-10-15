@@ -126,11 +126,30 @@
     return results;
   }
 
+  function unmatchedDetails(results, rows) {
+    const matchedRowKeys = new Set(results.flatMap(result =>
+      result.rows.map(row => row.rowKey).filter(Boolean)));
+    return {
+      missingTargets: results
+        .filter(result => result.status === "missing")
+        .map(result => result.target),
+      unmatchedRows: rows.filter(row => row.rowKey && !matchedRowKeys.has(row.rowKey))
+    };
+  }
+
   const months = {
     jan: 1, feb: 2, mar: 3, apr: 4, may: 5, jun: 6,
     jul: 7, aug: 8, sep: 9, oct: 10, nov: 11, dec: 12
   };
-  const api = { amountCents, classifyMatches, normalizeDate, normalizeText, parseCsv, recordsFromCsv };
+  const api = {
+    amountCents,
+    classifyMatches,
+    normalizeDate,
+    normalizeText,
+    parseCsv,
+    recordsFromCsv,
+    unmatchedDetails
+  };
   root.simplifiMatcher = api;
   if (typeof module !== "undefined" && module.exports) module.exports = api;
 })(globalThis);
