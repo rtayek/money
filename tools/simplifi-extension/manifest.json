@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Simplifi Transaction Probe",
-  "version": "0.3.1",
+  "version": "0.4.0",
   "description": "Inspects and locally matches exported Simplifi transactions without changing them.",
   "permissions": ["activeTab"],
   "action": {

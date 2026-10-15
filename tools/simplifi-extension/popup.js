@@ -39,6 +39,7 @@ async function loadCsv(event) {
   const file = event.target.files[0];
   const status = document.querySelector("#matchStatus");
   const match = document.querySelector("#match");
+  const sweep = document.querySelector("#sweep");
   if (!file) return;
   try {
     csvRecords = simplifiMatcher.recordsFromCsv(await file.text());
@@ -47,19 +48,19 @@ async function loadCsv(event) {
     const missing = required.filter(header => !headers.includes(header));
     if (missing.length) throw new Error(`Missing columns: ${missing.join(", ")}`);
     match.disabled = false;
+    sweep.disabled = false;
     status.textContent = `${csvRecords.length} CSV rows loaded.`;
   } catch (error) {
     csvRecords = [];
     match.disabled = true;
+    sweep.disabled = true;
     status.textContent = error.message;
   }
 }
 
-async function matchVisibleRows() {
+function filteredTargets() {
   const filter = document.querySelector("#payeeFilter").value.trim().toLowerCase();
-  const status = document.querySelector("#matchStatus");
-  const output = document.querySelector("#matchReport");
-  const targets = csvRecords
+  return csvRecords
     .filter(record => record.Notes.trim())
     .filter(record => !filter || record.Payee.toLowerCase().includes(filter))
     .map(record => ({
@@ -70,6 +71,12 @@ async function matchVisibleRows() {
       amount: record.Amount,
       notes: record.Notes
     }));
+}
+
+async function matchVisibleRows() {
+  const status = document.querySelector("#matchStatus");
+  const output = document.querySelector("#matchReport");
+  const targets = filteredTargets();
   try {
     const tab = await activeTab();
     const response = await chrome.tabs.sendMessage(tab.id, {
@@ -90,6 +97,42 @@ async function matchVisibleRows() {
   }
 }
 
+async function sweepFilteredRows() {
+  const status = document.querySelector("#matchStatus");
+  const output = document.querySelector("#matchReport");
+  const sweep = document.querySelector("#sweep");
+  const targets = filteredTargets();
+  status.textContent = "Sweeping filtered rows... Simplifi will scroll temporarily.";
+  output.textContent = "";
+  sweep.disabled = true;
+  try {
+    const tab = await activeTab();
+    const response = await chrome.tabs.sendMessage(tab.id, {
+      type: "simplifi-sweep-filtered",
+      targets
+    });
+    if (!response || !response.ok) {
+      throw new Error(response?.error || "The Simplifi page did not answer.");
+    }
+    const report = {
+      csvTargets: targets.length,
+      scannedTransactionRows: response.scannedRows,
+      scrollSteps: response.scrollSteps,
+      sweepComplete: !response.truncated,
+      ...response.counts,
+      legend: "green=exact, yellow=probable account mismatch, red=ambiguous"
+    };
+    output.textContent = JSON.stringify(report, null, 2);
+    status.textContent = response.truncated
+      ? `Sweep stopped early after ${response.scannedRows} rows; no Simplifi data changed.`
+      : `${response.counts.exact} exact matches across ${response.scannedRows} rows; no Simplifi data changed.`;
+  } catch (error) {
+    status.textContent = error.message;
+  } finally {
+    sweep.disabled = csvRecords.length === 0;
+  }
+}
+
 async function clearMatches() {
   const tab = await activeTab();
   await chrome.tabs.sendMessage(tab.id, { type: "simplifi-clear-matches" });
@@ -100,4 +143,5 @@ document.querySelector("#scan").addEventListener("click", scan);
 document.querySelector("#copy").addEventListener("click", copyReport);
 document.querySelector("#csv").addEventListener("change", loadCsv);
 document.querySelector("#match").addEventListener("click", matchVisibleRows);
+document.querySelector("#sweep").addEventListener("click", sweepFilteredRows);
 document.querySelector("#clear").addEventListener("click", clearMatches);

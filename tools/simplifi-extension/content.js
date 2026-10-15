@@ -64,6 +64,82 @@
       }));
   }
 
+  function transactionSnapshot(transaction) {
+    const { row, ...snapshot } = transaction;
+    return snapshot;
+  }
+
+  function transactionScroller() {
+    const candidates = Array.from(document.querySelectorAll(
+      ".MuiDataGrid-virtualScroller, [class*='MuiDataGrid-virtualScroller']"
+    )).filter(element => element.clientHeight > 0);
+    return candidates.sort((left, right) => right.scrollHeight - left.scrollHeight)[0] || null;
+  }
+
+  function waitForGrid() {
+    return new Promise(resolve => requestAnimationFrame(() =>
+      requestAnimationFrame(() => setTimeout(resolve, 140))));
+  }
+
+  async function sweepFiltered(targets) {
+    const scroller = transactionScroller();
+    if (!scroller) throw new Error("The Simplifi transaction grid was not found.");
+
+    const originalScrollTop = scroller.scrollTop;
+    const transactions = new Map();
+    const deadline = Date.now() + 30000;
+    let scrollSteps = 0;
+    let truncated = false;
+
+    function collectVisibleTransactions() {
+      for (const transaction of visibleTransactions()) {
+        if (transaction.rowKey) transactions.set(transaction.rowKey, transactionSnapshot(transaction));
+      }
+    }
+
+    try {
+      scroller.scrollTop = 0;
+      await waitForGrid();
+
+      for (let position = 0; position < 500; position++) {
+        collectVisibleTransactions();
+        const maximum = Math.max(0, scroller.scrollHeight - scroller.clientHeight);
+        const current = scroller.scrollTop;
+        if (current >= maximum - 1) break;
+        if (Date.now() >= deadline || position === 499) {
+          truncated = true;
+          break;
+        }
+
+        const distance = Math.max(100, Math.floor(scroller.clientHeight * 0.6));
+        const next = Math.min(maximum, current + distance);
+        scroller.scrollTop = next;
+        scroller.dispatchEvent(new Event("scroll", { bubbles: true }));
+        await waitForGrid();
+        scrollSteps++;
+        if (scroller.scrollTop <= current && next > current) {
+          truncated = true;
+          break;
+        }
+      }
+
+      collectVisibleTransactions();
+      const results = simplifiMatcher.classifyMatches(targets, Array.from(transactions.values()));
+      markMatches(results);
+      return {
+        scannedRows: transactions.size,
+        scrollSteps,
+        truncated,
+        counts: Object.fromEntries(["exact", "probable", "ambiguous", "missing"]
+          .map(status => [status, results.filter(result => result.status === status).length]))
+      };
+    } finally {
+      scroller.scrollTop = originalScrollTop;
+      scroller.dispatchEvent(new Event("scroll", { bubbles: true }));
+      await waitForGrid();
+    }
+  }
+
   function clearMatchMarks() {
     document.querySelector("#simplifi-match-styles")?.remove();
   }
@@ -95,7 +171,7 @@
     const controls = uniqueVisible(controlSelector, 150);
     const headers = uniqueVisible("[role='columnheader']", 50);
     return {
-      probeVersion: "0.3.1",
+      probeVersion: "0.4.0",
       capturedAt: new Date().toISOString(),
       page: {
         origin: location.origin,
@@ -118,7 +194,7 @@
       sendResponse({ ok: true, report: scan() });
     } else if (message && message.type === "simplifi-match-visible") {
       const transactions = visibleTransactions();
-      const safeRows = transactions.map(({ row, ...transaction }) => transaction);
+      const safeRows = transactions.map(transactionSnapshot);
       const results = simplifiMatcher.classifyMatches(message.targets, safeRows);
       markMatches(results);
       sendResponse({
@@ -127,6 +203,13 @@
         counts: Object.fromEntries(["exact", "probable", "ambiguous", "missing"]
           .map(status => [status, results.filter(result => result.status === status).length]))
       });
+    } else if (message && message.type === "simplifi-sweep-filtered") {
+      sweepFiltered(message.targets).then(result => {
+        sendResponse({ ok: true, ...result });
+      }).catch(error => {
+        sendResponse({ ok: false, error: error.message });
+      });
+      return true;
     } else if (message && message.type === "simplifi-clear-matches") {
       clearMatchMarks();
       sendResponse({ ok: true });

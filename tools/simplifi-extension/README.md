@@ -21,10 +21,10 @@ transaction labels.
 3. Confirm that it found row candidates and controls.
 4. Use **Copy report** when the adapter needs diagnosis.
 
-Only the visible DOM is scanned. Virtualized rows outside the viewport are not
-included. Version 0.3 can compare an annotated export with the visible rows.
-Editing stays disabled until read-only matching has been tested against real
-Simplifi pages.
+The basic scan only reads the visible DOM. Version 0.4 can also sweep through a
+filtered, virtualized transaction grid to compare an annotated export with all
+of the rows in that filtered view. Editing stays disabled until read-only
+matching has been tested against real Simplifi pages.
 
 ## Match an annotated export
 
@@ -35,9 +35,15 @@ Simplifi pages.
    unique date/payee/amount match with an account-name mismatch, and red is
    ambiguous.
 
+Choose **Sweep filtered rows** to read the entire filtered transaction grid.
+Simplifi scrolls temporarily while the extension collects transaction IDs and
+named cells, then returns to the original scroll position. Do not interact with
+the transaction grid during the sweep. The sweep stops after 30 seconds rather
+than continuing indefinitely and reports whether it completed.
+
 The CSV is parsed in memory inside the extension and is never uploaded or
 stored. Matching uses date, account, payee, and absolute amount. The extension
-does not write notes or click Simplifi controls in version 0.3.
+does not write notes or click Simplifi controls in version 0.4.
 Outlines are tied to transaction IDs, so scrolling cannot transfer a mark to a
 different virtualized row.
 
