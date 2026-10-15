@@ -42,4 +42,18 @@ const report = matcher.sweepReport(127, {
 assert.deepEqual(report.missingCsvTargets, [{ csvRow: 12 }]);
 assert.deepEqual(report.unmatchedSimplifiRows, [{ amount: "$3.99" }, { amount: "$5.99" }]);
 
+assert.deepEqual(matcher.mergeNote("", "recommended category: Entertainment"), {
+  value: "recommended category: Entertainment",
+  changed: true
+});
+assert.deepEqual(matcher.mergeNote("original note", "original note\nrecommended category: Entertainment"), {
+  value: "original note\nrecommended category: Entertainment",
+  changed: true
+});
+assert.deepEqual(matcher.mergeNote("original note", "recommended category: Entertainment"), {
+  value: "original note\nrecommended category: Entertainment",
+  changed: true
+});
+assert.equal(matcher.mergeNote("recommended category: Entertainment", "recommended category: Entertainment").changed, false);
+
 console.log("matcher-core tests passed");

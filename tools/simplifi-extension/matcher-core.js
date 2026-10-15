@@ -150,6 +150,20 @@
     };
   }
 
+  function mergeNote(existing, annotated) {
+    const current = String(existing || "");
+    const desired = String(annotated || "").trim();
+    if (!desired || current.includes(desired)) return { value: current, changed: false };
+    const trimmedCurrent = current.trimEnd();
+    if (trimmedCurrent && desired.startsWith(trimmedCurrent)) {
+      return { value: desired, changed: desired !== current };
+    }
+    return {
+      value: trimmedCurrent ? `${trimmedCurrent}\n${desired}` : desired,
+      changed: true
+    };
+  }
+
   const months = {
     jan: 1, feb: 2, mar: 3, apr: 4, may: 5, jun: 6,
     jul: 7, aug: 8, sep: 9, oct: 10, nov: 11, dec: 12
@@ -157,6 +171,7 @@
   const api = {
     amountCents,
     classifyMatches,
+    mergeNote,
     normalizeDate,
     normalizeText,
     parseCsv,

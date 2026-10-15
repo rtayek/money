@@ -25,6 +25,12 @@ With a transaction details panel open, **Inspect open transaction** produces a
 small read-only report of that editor's labels and controls. It never includes
 field values and does not click, type, or submit anything.
 
+Version 0.6 adds a controlled **Prepare open note (not saved)** pilot. After an
+annotated CSV is loaded and one transaction editor is open, it requires exactly
+one date/account/payee/amount match, preserves or appends to an existing Note,
+and fills the Note field. It never clicks **Update**; the human must inspect the
+field and decide whether to save or close the editor.
+
 The basic scan only reads the visible DOM. Version 0.4 can also sweep through a
 filtered, virtualized transaction grid to compare an annotated export with all
 of the rows in that filtered view. Editing stays disabled until read-only

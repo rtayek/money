@@ -83,16 +83,21 @@
     };
   }
 
-  function inspectOpenEditor() {
+  function openEditorRoot() {
     const textareas = uniqueVisible("textarea", 20);
     const roots = textareas.map(textarea => textarea.closest("form")).filter(Boolean);
     const root = roots.find(form => form.querySelector("button[type='submit']")) ||
       textareas[0]?.closest("[role='dialog'], aside, [class*='Drawer']") || null;
     if (!root) throw new Error("Open a transaction details panel first.");
+    return root;
+  }
+
+  function inspectOpenEditor() {
+    const root = openEditorRoot();
     const controls = Array.from(root.querySelectorAll("input, textarea, select, button"))
       .filter(isVisible);
     return {
-      probeVersion: "0.5.0",
+      probeVersion: "0.6.0",
       root: {
         tag: root.tagName.toLowerCase(),
         role: root.getAttribute("role") || "",
@@ -100,6 +105,68 @@
       },
       controlCount: controls.length,
       controls: controls.map(describeEditorControl)
+    };
+  }
+
+  function labelledControl(root, label, selector) {
+    return Array.from(root.querySelectorAll(selector))
+      .filter(isVisible)
+      .find(control => associatedLabel(control) === label) || null;
+  }
+
+  function setNativeValue(control, value) {
+    const prototype = control instanceof HTMLTextAreaElement
+      ? HTMLTextAreaElement.prototype
+      : HTMLInputElement.prototype;
+    const setter = Object.getOwnPropertyDescriptor(prototype, "value")?.set;
+    if (!setter) throw new Error("The Note field cannot be updated safely.");
+    setter.call(control, value);
+    control.dispatchEvent(new InputEvent("input", {
+      bubbles: true,
+      inputType: "insertText",
+      data: value
+    }));
+    control.dispatchEvent(new Event("change", { bubbles: true }));
+  }
+
+  async function prepareOpenNote(targets) {
+    const root = openEditorRoot();
+    const payee = labelledControl(root, "payee", "input");
+    const date = labelledControl(root, "date", "input");
+    const amount = labelledControl(root, "amount", "input");
+    const account = labelledControl(root, "account", "input");
+    const note = labelledControl(root, "note", "textarea");
+    if (!payee || !date || !amount || !account || !note) {
+      throw new Error("The open transaction fields could not be identified.");
+    }
+
+    const openTransaction = {
+      rowKey: "open-transaction",
+      payee: payee.value,
+      date: date.value,
+      amount: amount.value,
+      account: account.value
+    };
+    const matches = simplifiMatcher.classifyMatches(targets, [openTransaction])
+      .filter(result => result.status === "exact");
+    if (matches.length !== 1) {
+      throw new Error(`Expected one exact CSV match for the open transaction; found ${matches.length}.`);
+    }
+
+    const target = matches[0].target;
+    const existingNote = note.value;
+    const merged = simplifiMatcher.mergeNote(existingNote, target.notes);
+    if (merged.changed) {
+      setNativeValue(note, merged.value);
+      note.focus();
+      await waitForGrid();
+    }
+    const updateButton = root.querySelector("button[type='submit'].MuiButton-containedPrimary");
+    return {
+      csvRow: target.csvRow,
+      changed: merged.changed,
+      preservedExistingNote: Boolean(existingNote) && merged.value.startsWith(existingNote.trimEnd()),
+      updateEnabled: Boolean(updateButton && !updateButton.disabled)
     };
   }
 
@@ -247,7 +314,7 @@
     const controls = uniqueVisible(controlSelector, 150);
     const headers = uniqueVisible("[role='columnheader']", 50);
     return {
-      probeVersion: "0.5.0",
+      probeVersion: "0.6.0",
       capturedAt: new Date().toISOString(),
       page: {
         origin: location.origin,
@@ -274,6 +341,13 @@
       } catch (error) {
         sendResponse({ ok: false, error: error.message });
       }
+    } else if (message && message.type === "simplifi-prepare-open-note") {
+      prepareOpenNote(message.targets).then(result => {
+        sendResponse({ ok: true, ...result });
+      }).catch(error => {
+        sendResponse({ ok: false, error: error.message });
+      });
+      return true;
     } else if (message && message.type === "simplifi-match-visible") {
       const transactions = visibleTransactions();
       const safeRows = transactions.map(transactionSnapshot);

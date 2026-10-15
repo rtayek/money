@@ -60,6 +60,7 @@ async function loadCsv(event) {
   const status = document.querySelector("#matchStatus");
   const match = document.querySelector("#match");
   const sweep = document.querySelector("#sweep");
+  const prepare = document.querySelector("#prepareNote");
   if (!file) return;
   try {
     csvRecords = simplifiMatcher.recordsFromCsv(await file.text());
@@ -69,11 +70,13 @@ async function loadCsv(event) {
     if (missing.length) throw new Error(`Missing columns: ${missing.join(", ")}`);
     match.disabled = false;
     sweep.disabled = false;
+    prepare.disabled = false;
     status.textContent = `${csvRecords.length} CSV rows loaded.`;
   } catch (error) {
     csvRecords = [];
     match.disabled = true;
     sweep.disabled = true;
+    prepare.disabled = true;
     status.textContent = error.message;
   }
 }
@@ -147,6 +150,38 @@ async function sweepFilteredRows() {
   }
 }
 
+async function prepareOpenNote() {
+  const status = document.querySelector("#matchStatus");
+  const output = document.querySelector("#matchReport");
+  const prepare = document.querySelector("#prepareNote");
+  prepare.disabled = true;
+  status.textContent = "Preparing the open Note; Update will not be clicked.";
+  try {
+    const tab = await activeTab();
+    const response = await chrome.tabs.sendMessage(tab.id, {
+      type: "simplifi-prepare-open-note",
+      targets: filteredTargets()
+    });
+    if (!response || !response.ok) {
+      throw new Error(response?.error || "The Simplifi page did not answer.");
+    }
+    output.textContent = JSON.stringify({
+      matchedCsvRow: response.csvRow,
+      notePrepared: response.changed,
+      existingNotePreserved: response.preservedExistingNote,
+      updateButtonEnabled: response.updateEnabled,
+      saved: false
+    }, null, 2);
+    status.textContent = response.changed
+      ? `CSV row ${response.csvRow} prepared. Inspect the Note; Update was not clicked.`
+      : `CSV row ${response.csvRow} was already present; nothing changed.`;
+  } catch (error) {
+    status.textContent = error.message;
+  } finally {
+    prepare.disabled = csvRecords.length === 0;
+  }
+}
+
 async function clearMatches() {
   const tab = await activeTab();
   await chrome.tabs.sendMessage(tab.id, { type: "simplifi-clear-matches" });
@@ -159,4 +194,5 @@ document.querySelector("#copy").addEventListener("click", copyReport);
 document.querySelector("#csv").addEventListener("change", loadCsv);
 document.querySelector("#match").addEventListener("click", matchVisibleRows);
 document.querySelector("#sweep").addEventListener("click", sweepFilteredRows);
+document.querySelector("#prepareNote").addEventListener("click", prepareOpenNote);
 document.querySelector("#clear").addEventListener("click", clearMatches);
