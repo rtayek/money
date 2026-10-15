@@ -36,6 +36,8 @@ matches. It preserves existing Notes, skips annotations already present, saves
 one transaction at a time, reopens each saved transaction to verify the full
 annotation, and stops on the first unexpected UI or matching condition. It
 does not change categories or process probable, ambiguous, or missing matches.
+Version 0.7.1 opens a selected transaction through its Payee cell, matching the
+manual interaction required by Simplifi's data grid.
 
 The basic scan only reads the visible DOM. Version 0.4 can also sweep through a
 filtered, virtualized transaction grid to compare an annotated export with all

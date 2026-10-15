@@ -101,7 +101,7 @@
     const controls = Array.from(root.querySelectorAll("input, textarea, select, button"))
       .filter(isVisible);
     return {
-      probeVersion: "0.7.0",
+      probeVersion: "0.7.1",
       root: {
         tag: root.tagName.toLowerCase(),
         role: root.getAttribute("role") || "",
@@ -197,7 +197,18 @@
       const candidate = document.querySelector(selector);
       return candidate && isVisible(candidate) ? candidate : null;
     }, "A selected transaction row is no longer visible.");
-    row.click();
+    const payeeCell = row.querySelector("[role='gridcell'][data-field='payee']");
+    if (!payeeCell || !isVisible(payeeCell)) {
+      throw new Error("The selected transaction Payee cell was not found.");
+    }
+    const bounds = payeeCell.getBoundingClientRect();
+    payeeCell.dispatchEvent(new MouseEvent("click", {
+      bubbles: true,
+      cancelable: true,
+      view: window,
+      clientX: bounds.left + bounds.width / 2,
+      clientY: bounds.top + bounds.height / 2
+    }));
     return waitUntil(
       () => findOpenEditorRoot(),
       "The transaction editor did not open."
@@ -414,7 +425,7 @@
     const controls = uniqueVisible(controlSelector, 150);
     const headers = uniqueVisible("[role='columnheader']", 50);
     return {
-      probeVersion: "0.7.0",
+      probeVersion: "0.7.1",
       capturedAt: new Date().toISOString(),
       page: {
         origin: location.origin,
