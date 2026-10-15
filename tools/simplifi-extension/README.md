@@ -70,6 +70,9 @@ different virtualized row.
 Version 0.7.2 locates Close in the surrounding transaction dialog when
 Simplifi renders it outside the editor's inner form.
 
+Version 0.7.3 waits for the whole transaction dialog to finish closing before
+opening or verifying the next transaction in a batch.
+
 Run the deterministic sanitizer checks with:
 
 ```sh

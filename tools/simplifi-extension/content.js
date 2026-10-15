@@ -101,7 +101,7 @@
     const controls = Array.from(root.querySelectorAll("input, textarea, select, button"))
       .filter(isVisible);
     return {
-      probeVersion: "0.7.2",
+      probeVersion: "0.7.3",
       root: {
         tag: root.tagName.toLowerCase(),
         role: root.getAttribute("role") || "",
@@ -215,6 +215,15 @@
     );
   }
 
+  async function waitForEditorClosed(root, message) {
+    const dialog = root.closest("[role='dialog']") || root;
+    await waitUntil(
+      () => (!document.contains(dialog) || !isVisible(dialog)) && !findOpenEditorRoot(),
+      message
+    );
+    await new Promise(resolve => setTimeout(resolve, 750));
+  }
+
   async function closeTransaction(root) {
     const dialog = root.closest("[role='dialog']") || root;
     const close = dialog.querySelector(
@@ -222,10 +231,7 @@
     );
     if (!close) throw new Error("The transaction editor Close button was not found.");
     close.click();
-    await waitUntil(
-      () => !document.contains(root) || !isVisible(root),
-      "The transaction editor did not close."
-    );
+    await waitForEditorClosed(root, "The transaction editor did not close.");
   }
 
   async function verifySavedNote(rowKey, target) {
@@ -269,10 +275,7 @@
           throw new Error(`Update did not become available for CSV row ${target.csvRow}.`);
         }
         update.click();
-        await waitUntil(
-          () => !document.contains(root) || !isVisible(root),
-          `Update did not finish for CSV row ${target.csvRow}.`
-        );
+        await waitForEditorClosed(root, `Update did not finish for CSV row ${target.csvRow}.`);
         await verifySavedNote(rowKey, target);
         report.savedCsvRows.push(target.csvRow);
       } catch (error) {
@@ -428,7 +431,7 @@
     const controls = uniqueVisible(controlSelector, 150);
     const headers = uniqueVisible("[role='columnheader']", 50);
     return {
-      probeVersion: "0.7.2",
+      probeVersion: "0.7.3",
       capturedAt: new Date().toISOString(),
       page: {
         origin: location.origin,
