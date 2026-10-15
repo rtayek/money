@@ -188,7 +188,7 @@
     const controls = uniqueVisible(controlSelector, 150);
     const headers = uniqueVisible("[role='columnheader']", 50);
     return {
-      probeVersion: "0.4.1",
+      probeVersion: "0.4.2",
       capturedAt: new Date().toISOString(),
       page: {
         origin: location.origin,

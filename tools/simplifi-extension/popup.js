@@ -89,8 +89,6 @@ async function matchVisibleRows() {
       csvTargets: targets.length,
       visibleTransactionRows: response.visibleRows,
       ...response.counts,
-      missingCsvTargets: response.missingTargets,
-      unmatchedSimplifiRows: response.unmatchedRows,
       legend: "green=exact, yellow=probable account mismatch, red=ambiguous"
     };
     output.textContent = JSON.stringify(report, null, 2);
@@ -117,14 +115,7 @@ async function sweepFilteredRows() {
     if (!response || !response.ok) {
       throw new Error(response?.error || "The Simplifi page did not answer.");
     }
-    const report = {
-      csvTargets: targets.length,
-      scannedTransactionRows: response.scannedRows,
-      scrollSteps: response.scrollSteps,
-      sweepComplete: !response.truncated,
-      ...response.counts,
-      legend: "green=exact, yellow=probable account mismatch, red=ambiguous"
-    };
+    const report = simplifiMatcher.sweepReport(targets.length, response);
     output.textContent = JSON.stringify(report, null, 2);
     status.textContent = response.truncated
       ? `Sweep stopped early after ${response.scannedRows} rows; no Simplifi data changed.`

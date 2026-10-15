@@ -137,6 +137,19 @@
     };
   }
 
+  function sweepReport(targetCount, response) {
+    return {
+      csvTargets: targetCount,
+      scannedTransactionRows: response.scannedRows,
+      scrollSteps: response.scrollSteps,
+      sweepComplete: !response.truncated,
+      ...response.counts,
+      missingCsvTargets: response.missingTargets,
+      unmatchedSimplifiRows: response.unmatchedRows,
+      legend: "green=exact, yellow=probable account mismatch, red=ambiguous"
+    };
+  }
+
   const months = {
     jan: 1, feb: 2, mar: 3, apr: 4, may: 5, jun: 6,
     jul: 7, aug: 8, sep: 9, oct: 10, nov: 11, dec: 12
@@ -148,6 +161,7 @@
     normalizeText,
     parseCsv,
     recordsFromCsv,
+    sweepReport,
     unmatchedDetails
   };
   root.simplifiMatcher = api;

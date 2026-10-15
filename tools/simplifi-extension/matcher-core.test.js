@@ -31,4 +31,15 @@ const details = matcher.unmatchedDetails([
 assert.deepEqual(details.missingTargets.map(target => target.csvRow), [12]);
 assert.deepEqual(details.unmatchedRows.map(row => row.rowKey), ["two"]);
 
+const report = matcher.sweepReport(127, {
+  scannedRows: 128,
+  scrollSteps: 20,
+  truncated: false,
+  counts: { exact: 126, probable: 0, ambiguous: 0, missing: 1 },
+  missingTargets: [{ csvRow: 12 }],
+  unmatchedRows: [{ amount: "$3.99" }, { amount: "$5.99" }]
+});
+assert.deepEqual(report.missingCsvTargets, [{ csvRow: 12 }]);
+assert.deepEqual(report.unmatchedSimplifiRows, [{ amount: "$3.99" }, { amount: "$5.99" }]);
+
 console.log("matcher-core tests passed");
