@@ -71,11 +71,21 @@ const charge = { csvRow: 20, date: "10/13/2026", account: "Card", payee: "Google
 const signedRow = { rowKey: "signed", date: "10/13/2026", account: "Card", payee: "Google", amount: "-$19.99" };
 assert.equal(matcher.classifyMatches([charge], [signedRow])[0].status, "exact");
 assert.equal(matcher.classifyMatches([charge], [{ ...signedRow, amount: "+$19.99" }])[0].status, "missing");
-assert.equal(matcher.classifyMatches([charge], [{ ...signedRow, amount: "$19.99" }])[0].status, "probable");
-assert.equal(matcher.exactMatchCandidates([charge], [{ ...signedRow, amount: "$19.99" }], 5).length, 0);
+assert.equal(matcher.classifyMatches([charge], [{ ...signedRow, amount: "$19.99" }])[0].status, "exact");
+assert.equal(matcher.exactMatchCandidates([charge], [{ ...signedRow, amount: "$19.99" }], 5).length, 1);
 assert.equal(matcher.classifyMatches([charge, { ...charge, csvRow: 21 }], [signedRow])[0].status, "ambiguous");
 assert.equal(matcher.classifyMatches([charge], [signedRow, { ...signedRow, rowKey: "duplicate" }])[0].status, "ambiguous");
 assert.equal(matcher.classifyMatches([{ ...charge, amount: "19.99" }], [{ ...signedRow, amount: "+$19.99" }])[0].status, "exact");
+const credit = { ...charge, csvRow: 21, amount: "19.99" };
+assert.equal(matcher.classifyMatches([credit], [{ ...signedRow, amount: "$19.99" }])[0].status, "missing");
+assert.equal(matcher.classifyMatches([credit], [signedRow])[0].status, "missing");
+assert.equal(matcher.classifyMatches([charge], [{ ...signedRow, account: "Other Card", amount: "$19.99" }])[0].status, "probable");
+const mixed = matcher.classifyMatches([charge, credit], [
+  { ...signedRow, rowKey: "expense", amount: "$19.99" },
+  { ...signedRow, rowKey: "credit", amount: "+$19.99" }
+]);
+assert.deepEqual(mixed.map(result => result.status), ["exact", "exact"]);
+assert.deepEqual(mixed.map(result => result.rows[0].rowKey), ["expense", "credit"]);
 for (const amount of ["", " ", "pending", "$", "1.2.3", "--19.99"]) {
   assert.equal(matcher.amountCents(amount), null);
 }

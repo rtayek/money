@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Simplifi Transaction Probe",
-  "version": "0.7.6",
+  "version": "0.7.7",
   "description": "Locally matches Simplifi exports and prepares or saves one-line notes for confirmed exact matches.",
   "permissions": [
     "activeTab",

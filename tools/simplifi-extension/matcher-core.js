@@ -86,14 +86,19 @@
     return Math.round(number * 100) * (negative ? -1 : 1);
   }
 
-  function prepareTransaction(transaction) {
+  function pageAmountCents(value) {
+    const cents = amountCents(value);
+    if (cents === null) return null;
+    return String(value).includes("+") ? cents : -Math.abs(cents);
+  }
+
+  function prepareTransaction(transaction, fromPage = false) {
     return {
       ...transaction,
       dateKey: normalizeDate(transaction.date),
       accountKey: normalizeText(transaction.account),
       payeeKey: normalizeText(transaction.payee),
-      amountKey: amountCents(transaction.amount),
-      directionKnown: /[+\-\u2212]/.test(String(transaction.amount)) || /^\s*\(/.test(String(transaction.amount))
+      amountKey: fromPage ? pageAmountCents(transaction.amount) : amountCents(transaction.amount)
     };
   }
 
@@ -101,20 +106,17 @@
     return left.dateKey && left.dateKey === right.dateKey &&
       left.payeeKey && left.payeeKey === right.payeeKey &&
       left.amountKey !== null && right.amountKey !== null &&
-      Math.abs(left.amountKey) === Math.abs(right.amountKey);
+      left.amountKey === right.amountKey;
   }
 
   function classifyMatches(targets, visibleRows) {
-    const preparedRows = visibleRows.map(prepareTransaction);
+    const preparedRows = visibleRows.map(row => prepareTransaction(row, true));
     const results = targets.map(target => {
       const preparedTarget = prepareTransaction(target);
-      const core = preparedRows.filter(row => sameCore(preparedTarget, row) &&
-        (!row.directionKnown || preparedTarget.amountKey === row.amountKey));
+      const core = preparedRows.filter(row => sameCore(preparedTarget, row));
       const exactAccount = core.filter(row => preparedTarget.accountKey &&
         preparedTarget.accountKey === row.accountKey);
-      if (exactAccount.length === 1) return {
-        status: exactAccount[0].directionKnown ? "exact" : "probable", target, rows: exactAccount
-      };
+      if (exactAccount.length === 1) return { status: "exact", target, rows: exactAccount };
       if (exactAccount.length > 1) return { status: "ambiguous", target, rows: exactAccount };
       if (core.length === 1) return { status: "probable", target, rows: core };
       if (core.length > 1) return { status: "ambiguous", target, rows: core };
@@ -151,7 +153,7 @@
       ...response.counts,
       missingCsvTargets: response.missingTargets,
       unmatchedSimplifiRows: response.unmatchedRows,
-      legend: "green=exact signed match, yellow=probable account mismatch or unknown direction, red=ambiguous"
+      legend: "green=exact direction-aware match, yellow=probable account mismatch, red=ambiguous"
     };
   }
 

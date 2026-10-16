@@ -20,14 +20,15 @@ change categories, store the CSV, or make network requests.
 3. Open the extension and choose `all-annotated.csv`.
 4. Enter the same payee filter and choose **Match visible rows**.
 5. Review the totals and row outlines: green is exact, yellow is probable
-   (account mismatch or unknown transaction direction), and red is ambiguous.
+   (account mismatch), and red is ambiguous.
 
 Matching requires date, payee, amount, and account. Simplifi CSV amounts use
-negative values for charges and positive values for credits. An exact match
-requires the page amount to explicitly show its sign (`-`, `+`, or negative
-parentheses). An unsigned page amount is only probable; it cannot authorize
-note preparation or a batch save. Opposite signed amounts never match. Missing
-or invalid amounts never match. Duplicate claims are ambiguous.
+negative values for charges and positive values for credits. In the observed
+Simplifi page format, unsigned amounts are expenses and amounts with `+` are
+credits. The adapter converts that display format before comparing signed
+amounts; it also accepts explicit minus signs and negative parentheses.
+A credit cannot match a charge of the same magnitude. Missing or invalid
+amounts never match. Duplicate claims are ambiguous.
 
 Choose **Sweep filtered rows** to read the entire filtered, virtualized grid.
 Simplifi scrolls temporarily while the extension collects transaction IDs and
@@ -71,6 +72,11 @@ the file again. Session storage contains only tab/window IDs, not CSV contents.
 
 The layout uses 15px text, smaller buttons and tighter spacing. Match and
 inspection details expand below the controls. High-contrast colors remain.
+
+Version 0.7.7 interprets unsigned page amounts as expenses and `+` amounts
+as credits. This corrects 0.7.4–0.7.6 blocking unsigned expenses as probable.
+CSV signs retain their original meaning. The display convention is based on
+Ray's observations; verify a prepared note on a known expense before batch use.
 
 ## Checks
 
