@@ -1,0 +1,683 @@
+[1] Aug 8, 2026 | H H Nursery | -52.74
+  line 504   Aug 8, 2026  H H Nursery                                  -52.74  American Express® Traditional Gold
+  line 511   Aug 8, 2026  H H Nursery                                  -52.74  Traditional Gold Card
+
+[2] Sep 26, 2026 | The Toll Roads | -8.08
+  line 161   Sep 26, 2026 The Toll Roads                                -8.08  American Express® Traditional Gold
+  line 167   Sep 26, 2026 The Toll Roads                                -8.08  Traditional Gold Card
+
+[3] Aug 17, 2026 | Albertsons | -117.85
+  line 442   Aug 17, 2026 Albertsons                                  -117.85  American Express® Traditional Gold
+  line 444   Aug 17, 2026 Albertsons                                  -117.85  Traditional Gold Card
+
+[4] Oct 1, 2026 | Audible.com | -14.95
+  line 120   Oct 1, 2026  Audible.com                                  -14.95  American Express® Traditional Gold
+  line 124   Oct 1, 2026  Audible.com                                  -14.95  Traditional Gold Card
+
+[5] Sep 28, 2026 | West End Cafe | -11.50
+  line 150   Sep 28, 2026 West End Cafe                                -11.50  American Express® Traditional Gold
+  line 152   Sep 28, 2026 West End Cafe                                -11.50  Traditional Gold Card
+
+[6] Aug 11, 2026 | Ups | -38.19
+  line 477   Aug 11, 2026 Ups                                          -38.19  American Express® Traditional Gold
+  line 480   Aug 11, 2026 Ups                                          -38.19  Traditional Gold Card
+
+[7] Jun 19, 2025 | Google | -9.99
+  line 2623  Jun 19, 2025 Google                                        -9.99  American Express® Traditional Gold
+  line 2625  Jun 19, 2025 Google                                        -9.99  Traditional Gold Card
+
+[8] Jun 19, 2025 | Google | -1.99
+  line 2622  Jun 19, 2025 Google                                        -1.99  American Express® Traditional Gold
+  line 2624  Jun 19, 2025 Google                                        -1.99  Traditional Gold Card
+
+[9] Jul 30, 2026 | Dollar Tree | -15.77
+  line 587   Jul 30, 2026 Dollar Tree                                  -15.77  American Express® Traditional Gold
+  line 589   Jul 30, 2026 Dollar Tree                                  -15.77  Traditional Gold Card
+
+[10] Oct 2, 2026 | Albertsons | -21.24
+  line 105   Oct 2, 2026  Albertsons                                   -21.24  Traditional Gold Card
+  line 106   Oct 2, 2026  Albertsons                                   -21.24  American Express® Traditional Gold
+
+[11] Oct 13, 2025 | Google | -3.99
+  line 2105  Oct 13, 2025 Google                                        -3.99  American Express® Traditional Gold
+  line 2107  Oct 13, 2025 Google                                        -3.99  Traditional Gold Card
+
+[12] Oct 11, 2026 | Amazon | -4.99
+  line 18    Oct 11, 2026 Amazon                                        -4.99  American Express® Traditional Gold
+  line 19    Oct 11, 2026 Amazon                                        -4.99  Traditional Gold Card
+
+[13] Jul 28, 2026 | Walgreens | -8.76
+  line 601   Jul 28, 2026 Walgreens                                     -8.76  American Express® Traditional Gold
+  line 602   Jul 28, 2026 Walgreens                                     -8.76  Traditional Gold Card
+
+[14] Sep 19, 2026 | Google | -1.99
+  line 210   Sep 19, 2026 Google                                        -1.99  American Express® Traditional Gold
+  line 212   Sep 19, 2026 Google                                        -1.99  Traditional Gold Card
+
+[15] Aug 6, 2026 | Amazon | -10.94
+  line 524   Aug 6, 2026  Amazon                                       -10.94  American Express® Traditional Gold
+  line 527   Aug 6, 2026  Amazon                                       -10.94  Traditional Gold Card
+
+[16] Sep 22, 2026 | Albertsons | -62.72
+  line 191   Sep 22, 2026 Albertsons                                   -62.72  American Express® Traditional Gold
+  line 193   Sep 22, 2026 Albertsons                                   -62.72  Traditional Gold Card
+
+[17] Oct 3, 2026 | Shop Rite | -23.19
+  line 86    Oct 3, 2026  Shop Rite                                    -23.19  Traditional Gold Card
+  line 94    Oct 3, 2026  Shop Rite                                    -23.19  American Express® Traditional Gold
+
+[18] Sep 19, 2025 | Google | -1.99
+  line 2208  Sep 19, 2025 Google                                        -1.99  American Express® Traditional Gold
+  line 2209  Sep 19, 2025 Google                                        -1.99  Traditional Gold Card
+
+[19] Dec 26, 2025 | Google | -3.99
+  line 1775  Dec 26, 2025 Google                                        -3.99  American Express® Traditional Gold
+  line 1776  Dec 26, 2025 Google                                        -3.99  Traditional Gold Card
+
+[20] Jun 22, 2026 | Experian | -98.60
+  line 855   Jun 22, 2026 Experian                                     -98.60  American Express® Traditional Gold
+  line 856   Jun 22, 2026 Experian                                     -98.60  Traditional Gold Card
+
+[21] May 19, 2026 | Google | -1.99
+  line 1079  May 19, 2026 Google                                        -1.99  American Express® Traditional Gold
+  line 1081  May 19, 2026 Google                                        -1.99  Traditional Gold Card
+
+[22] Aug 30, 2026 | Carl's Jr | -5.51
+  line 339   Aug 30, 2026 Carl's Jr                                     -5.51  Traditional Gold Card
+  line 340   Aug 30, 2026 Carl's Jr                                     -5.51  American Express® Traditional Gold
+
+[23] Jul 10, 2025 | Google | -19.99
+  line 2531  Jul 10, 2025 Google                                       -19.99  American Express® Traditional Gold
+  line 2532  Jul 10, 2025 Google                                       -19.99  Traditional Gold Card
+
+[24] Sep 24, 2026 | Ralphs | -28.55
+  line 178   Sep 24, 2026 Ralphs                                       -28.55  American Express® Traditional Gold
+  line 181   Sep 24, 2026 Ralphs                                       -28.55  Traditional Gold Card
+
+[25] Sep 5, 2026 | Amazon | -12.14
+  line 285   Sep 5, 2026  Amazon                                       -12.14  American Express® Traditional Gold
+  line 287   Sep 5, 2026  Amazon                                       -12.14  Traditional Gold Card
+
+[26] Oct 3, 2026 | Waba Grill | -12.14
+  line 89    Oct 3, 2026  Waba Grill                                   -12.14  Traditional Gold Card
+  line 97    Oct 3, 2026  Waba Grill                                   -12.14  American Express® Traditional Gold
+
+[27] Oct 13, 2025 | Google | -14.99
+  line 2106  Oct 13, 2025 Google                                       -14.99  American Express® Traditional Gold
+  line 2108  Oct 13, 2025 Google                                       -14.99  Traditional Gold Card
+
+[28] Aug 22, 2026 | Home Goods | -93.73
+  line 398   Aug 22, 2026 Home Goods                                   -93.73  American Express® Traditional Gold
+  line 402   Aug 22, 2026 Home Goods                                   -93.73  Traditional Gold Card
+
+[29] Aug 8, 2026 | Wendy's | -1.11
+  line 506   Aug 8, 2026  Wendy's                                       -1.11  American Express® Traditional Gold
+  line 510   Aug 8, 2026  Wendy's                                       -1.11  Traditional Gold Card
+
+[30] Sep 29, 2026 | Wal-mart | -3.02
+  line 139   Sep 29, 2026 Wal-mart                                      -3.02  Traditional Gold Card
+  line 141   Sep 29, 2026 Wal-mart                                      -3.02  American Express® Traditional Gold
+
+[31] Oct 17, 2025 | Google | -1.99
+  line 2086  Oct 17, 2025 Google                                        -1.99  American Express® Traditional Gold
+  line 2087  Oct 17, 2025 Google                                        -1.99  Traditional Gold Card
+
+[32] Aug 31, 2026 | Valentino's Pizza | -22.67
+  line 334   Aug 31, 2026 Valentino's Pizza                            -22.67  American Express® Traditional Gold
+  line 335   Aug 31, 2026 Valentino's Pizza                            -22.67  Traditional Gold Card
+
+[33] Apr 9, 2026 | Google | -3.99
+  line 1306  Apr 9, 2026  Google                                        -3.99  American Express® Traditional Gold
+  line 1307  Apr 9, 2026  Google                                        -3.99  Traditional Gold Card
+
+[34] Jul 18, 2026 | Amazon | -24.30
+  line 681   Jul 18, 2026 Amazon                                       -24.30  American Express® Traditional Gold
+  line 684   Jul 18, 2026 Amazon                                       -24.30  Traditional Gold Card
+
+[35] Aug 22, 2026 | Home Goods | -37.64
+  line 399   Aug 22, 2026 Home Goods                                   -37.64  American Express® Traditional Gold
+  line 401   Aug 22, 2026 Home Goods                                   -37.64  Traditional Gold Card
+
+[36] Jun 17, 2026 | Google | -19.99
+  line 900   Jun 17, 2026 Google                                       -19.99  American Express® Traditional Gold
+  line 901   Jun 17, 2026 Google                                       -19.99  Traditional Gold Card
+
+[37] Aug 19, 2026 | Carl's Jr | -16.76
+  line 425   Aug 19, 2026 Carl's Jr                                    -16.76  American Express® Traditional Gold
+  line 427   Aug 19, 2026 Carl's Jr                                    -16.76  Traditional Gold Card
+
+[38] Aug 21, 2026 | The Toll Roads | -8.08
+  line 409   Aug 21, 2026 The Toll Roads                                -8.08  American Express® Traditional Gold
+  line 411   Aug 21, 2026 The Toll Roads                                -8.08  Traditional Gold Card
+
+[39] Jul 23, 2026 | Pick Up Stix | -19.04
+  line 633   Jul 23, 2026 Pick Up Stix                                 -19.04  American Express® Traditional Gold
+  line 634   Jul 23, 2026 Pick Up Stix                                 -19.04  Traditional Gold Card
+
+[40] Sep 20, 2026 | Dollar Tree | -8.16
+  line 202   Sep 20, 2026 Dollar Tree                                   -8.16  American Express® Traditional Gold
+  line 206   Sep 20, 2026 Dollar Tree                                   -8.16  Traditional Gold Card
+
+[41] Aug 8, 2026 | Walgreens | -1.60
+  line 503   Aug 8, 2026  Walgreens                                     -1.60  American Express® Traditional Gold
+  line 507   Aug 8, 2026  Walgreens                                     -1.60  Traditional Gold Card
+
+[42] Jul 13, 2025 | The Toll Roads | -3.96
+  line 2521  Jul 13, 2025 The Toll Roads                                -3.96  American Express® Traditional Gold
+  line 2522  Jul 13, 2025 The Toll Roads                                -3.96  Traditional Gold Card
+
+[43] Sep 13, 2025 | Google | -3.99
+  line 2233  Sep 13, 2025 Google                                        -3.99  American Express® Traditional Gold
+  line 2235  Sep 13, 2025 Google                                        -3.99  Traditional Gold Card
+
+[44] Oct 21, 2025 | Google | -20.99
+  line 2058  Oct 21, 2025 Google                                       -20.99  American Express® Traditional Gold
+  line 2059  Oct 21, 2025 Google                                       -20.99  Traditional Gold Card
+
+[45] Aug 17, 2026 | Michaels | -9.38
+  line 441   Aug 17, 2026 Michaels                                      -9.38  American Express® Traditional Gold
+  line 443   Aug 17, 2026 Michaels                                      -9.38  Traditional Gold Card
+
+[46] Aug 21, 2026 | Dollar Tree | -13.91
+  line 406   Aug 21, 2026 Dollar Tree                                  -13.91  American Express® Traditional Gold
+  line 412   Aug 21, 2026 Dollar Tree                                  -13.91  Traditional Gold Card
+
+[47] Jul 27, 2026 | Wendy's | -9.92
+  line 603   Jul 27, 2026 Wendy's                                       -9.92  American Express® Traditional Gold
+  line 611   Jul 27, 2026 Wendy's                                       -9.92  Traditional Gold Card
+
+[48] Jan 23, 2026 | Google | -1.99
+  line 1679  Jan 23, 2026 Google                                        -1.99  American Express® Traditional Gold
+  line 1680  Jan 23, 2026 Google                                        -1.99  Traditional Gold Card
+
+[49] Jul 27, 2026 | West End Cafe | -11.50
+  line 607   Jul 27, 2026 West End Cafe                                -11.50  American Express® Traditional Gold
+  line 609   Jul 27, 2026 West End Cafe                                -11.50  Traditional Gold Card
+
+[50] Aug 14, 2026 | Wendy's | -11.03
+  line 455   Aug 14, 2026 Wendy's                                      -11.03  American Express® Traditional Gold
+  line 456   Aug 14, 2026 Wendy's                                      -11.03  Traditional Gold Card
+
+[51] Oct 5, 2025 | The Toll Roads | -2.25
+  line 2138  Oct 5, 2025  The Toll Roads                                -2.25  American Express® Traditional Gold
+  line 2139  Oct 5, 2025  The Toll Roads                                -2.25  Traditional Gold Card
+
+[52] Dec 18, 2025 | Google | -1.99
+  line 1804  Dec 18, 2025 Google                                        -1.99  American Express® Traditional Gold
+  line 1805  Dec 18, 2025 Google                                        -1.99  Traditional Gold Card
+
+[53] Sep 30, 2026 | Dollar Tree | -6.25
+  line 133   Sep 30, 2026 Dollar Tree                                   -6.25  American Express® Traditional Gold
+  line 136   Sep 30, 2026 Dollar Tree                                   -6.25  Traditional Gold Card
+
+[54] Sep 13, 2025 | Google | -9.99
+  line 2234  Sep 13, 2025 Google                                        -9.99  American Express® Traditional Gold
+  line 2236  Sep 13, 2025 Google                                        -9.99  Traditional Gold Card
+
+[55] Apr 12, 2025 | The Toll Roads | -7.76
+  line 2916  Apr 12, 2025 The Toll Roads                                -7.76  American Express® Traditional Gold
+  line 2917  Apr 12, 2025 The Toll Roads                                -7.76  Traditional Gold Card
+
+[56] Sep 24, 2026 | Cvs | -11.68
+  line 179   Sep 24, 2026 Cvs                                          -11.68  American Express® Traditional Gold
+  line 180   Sep 24, 2026 Cvs                                          -11.68  Traditional Gold Card
+
+[57] Jul 29, 2026 | Del Taco | -16.65
+  line 592   Jul 29, 2026 Del Taco                                     -16.65  American Express® Traditional Gold
+  line 594   Jul 29, 2026 Del Taco                                     -16.65  Traditional Gold Card
+
+[58] Oct 7, 2026 | Target | -44.54
+  line 41    Oct 7, 2026  Target                                       -44.54  American Express® Traditional Gold
+  line 46    Oct 7, 2026  Target                                       -44.54  Traditional Gold Card
+
+[59] Aug 9, 2026 | Home Depot | -118.12
+  line 495   Aug 9, 2026  Home Depot                                  -118.12  American Express® Traditional Gold
+  line 498   Aug 9, 2026  Home Depot                                  -118.12  Traditional Gold Card
+
+[60] Aug 20, 2026 | Wendy's | -13.24
+  line 417   Aug 20, 2026 Wendy's                                      -13.24  American Express® Traditional Gold
+  line 418   Aug 20, 2026 Wendy's                                      -13.24  Traditional Gold Card
+
+[61] Oct 3, 2026 | The Toll Roads | -4.04
+  line 87    Oct 3, 2026  The Toll Roads                                -4.04  Traditional Gold Card
+  line 95    Oct 3, 2026  The Toll Roads                                -4.04  American Express® Traditional Gold
+
+[62] Mar 6, 2026 | Google | -2.99
+  line 1486  Mar 6, 2026  Google                                        -2.99  American Express® Traditional Gold
+  line 1487  Mar 6, 2026  Google                                        -2.99  Traditional Gold Card
+
+[63] Aug 26, 2026 | Albertsons | -44.40
+  line 364   Aug 26, 2026 Albertsons                                   -44.40  American Express® Traditional Gold
+  line 368   Aug 26, 2026 Albertsons                                   -44.40  Traditional Gold Card
+
+[64] Aug 14, 2026 | Wendy's | -7.71
+  line 454   Aug 14, 2026 Wendy's                                       -7.71  American Express® Traditional Gold
+  line 457   Aug 14, 2026 Wendy's                                       -7.71  Traditional Gold Card
+
+[65] Sep 20, 2026 | Dollar Tree | -25.00
+  line 201   Sep 20, 2026 Dollar Tree                                  -25.00  American Express® Traditional Gold
+  line 203   Sep 20, 2026 Dollar Tree                                  -25.00  American Express® Traditional Gold
+  line 204   Sep 20, 2026 Dollar Tree                                  -25.00  Traditional Gold Card
+  line 207   Sep 20, 2026 Dollar Tree                                  -25.00  Traditional Gold Card
+
+[66] Mar 6, 2025 | Google | -2.99
+  line 3058  Mar 6, 2025  Google                                        -2.99  American Express® Traditional Gold
+  line 3059  Mar 6, 2025  Google                                        -2.99  Traditional Gold Card
+
+[67] Oct 3, 2026 | Dollar Tree | -3.17
+  line 83    Oct 3, 2026  Dollar Tree                                   -3.17  Traditional Gold Card
+  line 91    Oct 3, 2026  Dollar Tree                                   -3.17  American Express® Traditional Gold
+
+[68] Sep 30, 2026 | Domino's Pizza | -19.33
+  line 134   Sep 30, 2026 Domino's Pizza                               -19.33  American Express® Traditional Gold
+  line 135   Sep 30, 2026 Domino's Pizza                               -19.33  Traditional Gold Card
+
+[69] Jul 31, 2026 | Marugame Udon | -38.73
+  line 579   Jul 31, 2026 Marugame Udon                                -38.73  American Express® Traditional Gold
+  line 581   Jul 31, 2026 Marugame Udon                                -38.73  Traditional Gold Card
+
+[70] Jun 29, 2025 | Google | -3.99
+  line 2582  Jun 29, 2025 Google                                        -3.99  American Express® Traditional Gold
+  line 2583  Jun 29, 2025 Google                                        -3.99  Traditional Gold Card
+
+[71] Aug 6, 2025 | Birthdays | -4.49
+  line 2423  Aug 6, 2025  Birthdays                                     -4.49  American Express® Traditional Gold
+  line 2425  Aug 6, 2025  Birthdays                                     -4.49  Traditional Gold Card
+
+[72] Aug 2, 2025 | Google | -3.99
+  line 2452  Aug 2, 2025  Google                                        -3.99  American Express® Traditional Gold
+  line 2453  Aug 2, 2025  Google                                        -3.99  Traditional Gold Card
+
+[73] Aug 21, 2026 | Bj's Restaurant | -30.00
+  line 408   Aug 21, 2026 Bj's Restaurant                              -30.00  American Express® Traditional Gold
+  line 414   Aug 21, 2026 Bj's Restaurant                              -30.00  Traditional Gold Card
+
+[74] Jun 22, 2025 | The Toll Roads | -4.05
+  line 2609  Jun 22, 2025 The Toll Roads                                -4.05  American Express® Traditional Gold
+  line 2612  Jun 22, 2025 The Toll Roads                                -4.05  Traditional Gold Card
+
+[75] Mar 18, 2025 | The Toll Roads | -0.70
+  line 3019  Mar 18, 2025 The Toll Roads                                -0.70  American Express® Traditional Gold
+  line 3020  Mar 18, 2025 The Toll Roads                                -0.70  Traditional Gold Card
+
+[76] Mar 27, 2026 | The Toll Roads | -3.96
+  line 1399  Mar 27, 2026 The Toll Roads                                -3.96  American Express® Traditional Gold
+  line 1400  Mar 27, 2026 The Toll Roads                                -3.96  Traditional Gold Card
+
+[77] Jul 30, 2026 | Wendy's | -14.24
+  line 586   Jul 30, 2026 Wendy's                                      -14.24  American Express® Traditional Gold
+  line 588   Jul 30, 2026 Wendy's                                      -14.24  Traditional Gold Card
+
+[78] Aug 21, 2026 | Yogurtland | -12.74
+  line 407   Aug 21, 2026 Yogurtland                                   -12.74  American Express® Traditional Gold
+  line 413   Aug 21, 2026 Yogurtland                                   -12.74  Traditional Gold Card
+
+[79] Nov 18, 2025 | Google | -1.99
+  line 1929  Nov 18, 2025 Google                                        -1.99  American Express® Traditional Gold
+  line 1930  Nov 18, 2025 Google                                        -1.99  Traditional Gold Card
+
+[80] Feb 18, 2026 | Google | -1.99
+  line 1568  Feb 18, 2026 Google                                        -1.99  American Express® Traditional Gold
+  line 1569  Feb 18, 2026 Google                                        -1.99  Traditional Gold Card
+
+[81] Aug 21, 2026 | West End Cafe | -11.50
+  line 405   Aug 21, 2026 West End Cafe                                -11.50  American Express® Traditional Gold
+  line 410   Aug 21, 2026 West End Cafe                                -11.50  Traditional Gold Card
+
+[82] May 9, 2026 | Google | -9.99
+  line 1122  May 9, 2026  Google                                        -9.99  American Express® Traditional Gold
+  line 1123  May 9, 2026  Google                                        -9.99  Traditional Gold Card
+
+[83] Feb 18, 2025 | Google | -1.99
+  line 3129  Feb 18, 2025 Google                                        -1.99  American Express® Traditional Gold
+  line 3130  Feb 18, 2025 Google                                        -1.99  Traditional Gold Card
+
+[84] Aug 6, 2026 | Nailtique Lakewood | -115.00
+  line 523   Aug 6, 2026  Nailtique Lakewood                          -115.00  American Express® Traditional Gold
+  line 526   Aug 6, 2026  Nailtique Lakewood                          -115.00  Traditional Gold Card
+
+[85] Jul 25, 2026 | Del Taco | -16.65
+  line 626   Jul 25, 2026 Del Taco                                     -16.65  American Express® Traditional Gold
+  line 628   Jul 25, 2026 Del Taco                                     -16.65  Traditional Gold Card
+
+[86] Aug 3, 2026 | Valentino's Pizza | -34.01
+  line 552   Aug 3, 2026  Valentino's Pizza                            -34.01  American Express® Traditional Gold
+  line 553   Aug 3, 2026  Valentino's Pizza                            -34.01  Traditional Gold Card
+
+[87] Jul 19, 2026 | Lakewood Center Cinemas | -20.00
+  line 666   Jul 19, 2026 Lakewood Center Cinemas                      -20.00  American Express® Traditional Gold
+  line 671   Jul 19, 2026 Lakewood Center Cinemas                      -20.00  Traditional Gold Card
+
+[88] Nov 4, 2025 | Google | -4.99
+  line 1974  Nov 4, 2025  Google                                        -4.99  American Express® Traditional Gold
+  line 1975  Nov 4, 2025  Google                                        -4.99  Traditional Gold Card
+
+[89] Jul 27, 2026 | Home Depot | -53.33
+  line 606   Jul 27, 2026 Home Depot                                   -53.33  American Express® Traditional Gold
+  line 608   Jul 27, 2026 Home Depot                                   -53.33  Traditional Gold Card
+
+[90] Jul 29, 2026 | Somatic Body Piercing | -36.00
+  line 593   Jul 29, 2026 Somatic Body Piercing                        -36.00  American Express® Traditional Gold
+  line 595   Jul 29, 2026 Somatic Body Piercing                        -36.00  Traditional Gold Card
+
+[91] Mar 31, 2026 | Google | -3.99
+  line 1380  Mar 31, 2026 Google                                        -3.99  American Express® Traditional Gold
+  line 1381  Mar 31, 2026 Google                                        -3.99  Traditional Gold Card
+
+[92] Jul 19, 2026 | Google | -1.99
+  line 664   Jul 19, 2026 Google                                        -1.99  American Express® Traditional Gold
+  line 667   Jul 19, 2026 Google                                        -1.99  Traditional Gold Card
+
+[93] Sep 26, 2026 | Dollar Tree | -17.03
+  line 162   Sep 26, 2026 Dollar Tree                                  -17.03  American Express® Traditional Gold
+  line 168   Sep 26, 2026 Dollar Tree                                  -17.03  Traditional Gold Card
+
+[94] Aug 2, 2026 | Mcdonald's | -4.63
+  line 572   Aug 2, 2026  Mcdonald's                                    -4.63  American Express® Traditional Gold
+  line 574   Aug 2, 2026  Mcdonald's                                    -4.63  Traditional Gold Card
+
+[95] Aug 7, 2026 | West End Cafe | -13.00
+  line 515   Aug 7, 2026  West End Cafe                                -13.00  American Express® Traditional Gold
+  line 516   Aug 7, 2026  West End Cafe                                -13.00  Traditional Gold Card
+
+[96] Jan 18, 2025 | Google | -1.99
+  line 3242  Jan 18, 2025 Google                                        -1.99  American Express® Traditional Gold
+  line 3243  Jan 18, 2025 Google                                        -1.99  Traditional Gold Card
+
+[97] Jul 21, 2026 | Google | -3.99
+  line 651   Jul 21, 2026 Google                                        -3.99  American Express® Traditional Gold
+  line 652   Jul 21, 2026 Google                                        -3.99  Traditional Gold Card
+
+[98] Sep 29, 2026 | Popeye's | -16.87
+  line 140   Sep 29, 2026 Popeye's                                     -16.87  Traditional Gold Card
+  line 142   Sep 29, 2026 Popeye's                                     -16.87  American Express® Traditional Gold
+
+[99] Jul 19, 2025 | Google | -1.99
+  line 2497  Jul 19, 2025 Google                                        -1.99  American Express® Traditional Gold
+  line 2498  Jul 19, 2025 Google                                        -1.99  Traditional Gold Card
+
+[100] Sep 17, 2025 | Renewal Membership Fee Xxxx1012 | -35.00
+  line 2216  Sep 17, 2025 Renewal Membership Fee Xxxx1012              -35.00  American Express® Traditional Gold
+  line 2217  Sep 17, 2025 Renewal Membership Fee Xxxx1012              -35.00  Traditional Gold Card
+
+[101] Jun 22, 2025 | Experian | -98.60
+  line 2610  Jun 22, 2025 Experian                                     -98.60  American Express® Traditional Gold
+  line 2611  Jun 22, 2025 Experian                                     -98.60  Traditional Gold Card
+
+[102] Oct 7, 2026 | Michaels | -53.46
+  line 42    Oct 7, 2026  Michaels                                     -53.46  American Express® Traditional Gold
+  line 47    Oct 7, 2026  Michaels                                     -53.46  Traditional Gold Card
+
+[103] Jun 10, 2025 | Google | -19.99
+  line 2657  Jun 10, 2025 Google                                       -19.99  American Express® Traditional Gold
+  line 2658  Jun 10, 2025 Google                                       -19.99  Traditional Gold Card
+
+[104] Oct 18, 2025 | Google | -1.99
+  line 2081  Oct 18, 2025 Google                                        -1.99  American Express® Traditional Gold
+  line 2082  Oct 18, 2025 Google                                        -1.99  Traditional Gold Card
+
+[105] May 6, 2026 | Google | -3.99
+  line 1143  May 6, 2026  Google                                        -3.99  American Express® Traditional Gold
+  line 1144  May 6, 2026  Google                                        -3.99  Traditional Gold Card
+
+[106] Sep 27, 2026 | Wal-mart | -87.09
+  line 158   Sep 27, 2026 Wal-mart                                     -87.09  American Express® Traditional Gold
+  line 159   Sep 27, 2026 Wal-mart                                     -87.09  Traditional Gold Card
+
+[107] Oct 10, 2026 | The Toll Roads | -8.08
+  line 20    Oct 10, 2026 The Toll Roads                                -8.08  American Express® Traditional Gold
+  line 22    Oct 10, 2026 The Toll Roads                                -8.08  Traditional Gold Card
+
+[108] Sep 19, 2026 | The Toll Roads | -4.04
+  line 211   Sep 19, 2026 The Toll Roads                                -4.04  American Express® Traditional Gold
+  line 214   Sep 19, 2026 The Toll Roads                                -4.04  Traditional Gold Card
+
+[109] Aug 6, 2025 | Birthdays | -5.99
+  line 2424  Aug 6, 2025  Birthdays                                     -5.99  American Express® Traditional Gold
+  line 2426  Aug 6, 2025  Birthdays                                     -5.99  Traditional Gold Card
+
+[110] Sep 17, 2026 | Renewal Membership Fee Xxxx1012 | -35.00
+  line 218   Sep 17, 2026 Renewal Membership Fee Xxxx1012              -35.00  American Express® Traditional Gold
+  line 221   Sep 17, 2026 Renewal Membership Fee Xxxx1012              -35.00  Traditional Gold Card
+
+[111] Jul 27, 2026 | Minutekey | -9.95
+  line 604   Jul 27, 2026 Minutekey                                     -9.95  American Express® Traditional Gold
+  line 612   Jul 27, 2026 Minutekey                                     -9.95  Traditional Gold Card
+
+[112] Jun 26, 2025 | Google | -9.99
+  line 2587  Jun 26, 2025 Google                                        -9.99  American Express® Traditional Gold
+  line 2588  Jun 26, 2025 Google                                        -9.99  Traditional Gold Card
+
+[113] Sep 23, 2026 | Home Depot | -67.82
+  line 188   Sep 23, 2026 Home Depot                                   -67.82  American Express® Traditional Gold
+  line 189   Sep 23, 2026 Home Depot                                   -67.82  Traditional Gold Card
+
+[114] Oct 6, 2026 | West End Cafe | -12.65
+  line 57    Oct 6, 2026  West End Cafe                                -12.65  American Express® Traditional Gold
+  line 65    Oct 6, 2026  West End Cafe                                -12.65  Traditional Gold Card
+
+[115] Aug 24, 2026 | Google | -3.99
+  line 385   Aug 24, 2026 Google                                        -3.99  Traditional Gold Card
+  line 389   Aug 24, 2026 Google                                        -3.99  American Express® Traditional Gold
+
+[116] Aug 5, 2026 | Mcdonald's | -11.78
+  line 535   Aug 5, 2026  Mcdonald's                                   -11.78  American Express® Traditional Gold
+  line 536   Aug 5, 2026  Mcdonald's                                   -11.78  Traditional Gold Card
+
+[117] Aug 9, 2026 | Valentino's Pizza | -22.67
+  line 494   Aug 9, 2026  Valentino's Pizza                            -22.67  American Express® Traditional Gold
+  line 497   Aug 9, 2026  Valentino's Pizza                            -22.67  Traditional Gold Card
+
+[118] Aug 19, 2026 | Google | -1.99
+  line 424   Aug 19, 2026 Google                                        -1.99  American Express® Traditional Gold
+  line 429   Aug 19, 2026 Google                                        -1.99  Traditional Gold Card
+
+[119] Aug 20, 2026 | Prohealth Partners | -20.00
+  line 416   Aug 20, 2026 Prohealth Partners                           -20.00  American Express® Traditional Gold
+  line 420   Aug 20, 2026 Prohealth Partners                           -20.00  Traditional Gold Card
+
+[120] Sep 25, 2026 | Ups | -4.00
+  line 174   Sep 25, 2026 Ups                                           -4.00  American Express® Traditional Gold
+  line 175   Sep 25, 2026 Ups                                           -4.00  Traditional Gold Card
+
+[121] Sep 12, 2026 | Amazon | -21.99
+  line 256   Sep 12, 2026 Amazon                                       -21.99  Traditional Gold Card
+  line 258   Sep 12, 2026 Amazon                                       -21.99  American Express® Traditional Gold
+
+[122] Aug 19, 2025 | Google | -1.99
+  line 2374  Aug 19, 2025 Google                                        -1.99  American Express® Traditional Gold
+  line 2375  Aug 19, 2025 Google                                        -1.99  Traditional Gold Card
+
+[123] Oct 30, 2025 | Amazon | -3.99
+  line 2010  Oct 30, 2025 Amazon                                        -3.99  American Express® Traditional Gold
+  line 2011  Oct 30, 2025 Amazon                                        -3.99  Traditional Gold Card
+
+[124] Aug 29, 2026 | Dollar Tree | -33.43
+  line 344   Aug 29, 2026 Dollar Tree                                  -33.43  American Express® Traditional Gold
+  line 348   Aug 29, 2026 Dollar Tree                                  -33.43  Traditional Gold Card
+
+[125] Aug 6, 2026 | Google | -5.99
+  line 525   Aug 6, 2026  Google                                        -5.99  American Express® Traditional Gold
+  line 528   Aug 6, 2026  Google                                        -5.99  Traditional Gold Card
+
+[126] Feb 12, 2026 | Google | -3.99
+  line 1592  Feb 12, 2026 Google                                        -3.99  American Express® Traditional Gold
+  line 1593  Feb 12, 2026 Google                                        -3.99  Traditional Gold Card
+
+[127] Aug 26, 2026 | Kfc | -9.47
+  line 363   Aug 26, 2026 Kfc                                           -9.47  American Express® Traditional Gold
+  line 367   Aug 26, 2026 Kfc                                           -9.47  Traditional Gold Card
+
+[128] Aug 13, 2026 | Wendy's | -6.61
+  line 459   Aug 13, 2026 Wendy's                                       -6.61  American Express® Traditional Gold
+  line 460   Aug 13, 2026 Wendy's                                       -6.61  Traditional Gold Card
+
+[129] Oct 1, 2026 | Del Taco | -10.27
+  line 121   Oct 1, 2026  Del Taco                                     -10.27  American Express® Traditional Gold
+  line 125   Oct 1, 2026  Del Taco                                     -10.27  Traditional Gold Card
+
+[130] Oct 7, 2026 | Michaels | -23.47
+  line 40    Oct 7, 2026  Michaels                                     -23.47  American Express® Traditional Gold
+  line 45    Oct 7, 2026  Michaels                                     -23.47  Traditional Gold Card
+
+[131] Sep 20, 2026 | Dollar Tree | -13.43
+  line 200   Sep 20, 2026 Dollar Tree                                  -13.43  American Express® Traditional Gold
+  line 205   Sep 20, 2026 Dollar Tree                                  -13.43  Traditional Gold Card
+
+[132] Oct 11, 2026 | Amazon | -21.99
+  line 10    Oct 11, 2026 Amazon                                       -21.99  American Express® Traditional Gold
+  line 11    Oct 11, 2026 Amazon                                       -21.99  Traditional Gold Card
+
+[133] Mar 18, 2026 | Google | -1.99
+  line 1439  Mar 18, 2026 Google                                        -1.99  American Express® Traditional Gold
+  line 1440  Mar 18, 2026 Google                                        -1.99  Traditional Gold Card
+
+[134] Jan 19, 2026 | Google | -1.99
+  line 1700  Jan 19, 2026 Google                                        -1.99  American Express® Traditional Gold
+  line 1701  Jan 19, 2026 Google                                        -1.99  Traditional Gold Card
+
+[135] Aug 28, 2026 | Wal-mart | -31.78
+  line 350   Aug 28, 2026 Wal-mart                                     -31.78  American Express® Traditional Gold
+  line 355   Aug 28, 2026 Wal-mart                                     -31.78  Traditional Gold Card
+
+[136] Feb 28, 2026 | The Toll Roads | -12.05
+  line 1523  Feb 28, 2026 The Toll Roads                               -12.05  American Express® Traditional Gold
+  line 1524  Feb 28, 2026 The Toll Roads                               -12.05  Traditional Gold Card
+
+[137] Jul 25, 2026 | Mcdonald's | -7.82
+  line 625   Jul 25, 2026 Mcdonald's                                    -7.82  American Express® Traditional Gold
+  line 627   Jul 25, 2026 Mcdonald's                                    -7.82  Traditional Gold Card
+
+[138] Jun 15, 2026 | Google | -3.99
+  line 912   Jun 15, 2026 Google                                        -3.99  American Express® Traditional Gold
+  line 913   Jun 15, 2026 Google                                        -3.99  Traditional Gold Card
+
+[139] Jul 19, 2026 | Lakewood Center Cinemas | -43.00
+  line 665   Jul 19, 2026 Lakewood Center Cinemas                      -43.00  American Express® Traditional Gold
+  line 669   Jul 19, 2026 Lakewood Center Cinemas                      -43.00  Traditional Gold Card
+
+[140] Sep 26, 2026 | Ginzaya | -14.00
+  line 164   Sep 26, 2026 Ginzaya                                      -14.00  American Express® Traditional Gold
+  line 170   Sep 26, 2026 Ginzaya                                      -14.00  Traditional Gold Card
+
+[141] Aug 16, 2025 | Google | -1.99
+  line 2388  Aug 16, 2025 Google                                        -1.99  American Express® Traditional Gold
+  line 2389  Aug 16, 2025 Google                                        -1.99  Traditional Gold Card
+
+[142] Jul 16, 2025 | The Toll Roads | -8.09
+  line 2503  Jul 16, 2025 The Toll Roads                                -8.09  American Express® Traditional Gold
+  line 2504  Jul 16, 2025 The Toll Roads                                -8.09  Traditional Gold Card
+
+[143] Oct 3, 2026 | Kfc | -21.50
+  line 88    Oct 3, 2026  Kfc                                          -21.50  Traditional Gold Card
+  line 96    Oct 3, 2026  Kfc                                          -21.50  American Express® Traditional Gold
+
+[144] Jul 27, 2026 | Vons | -268.50
+  line 605   Jul 27, 2026 Vons                                        -268.50  American Express® Traditional Gold
+  line 614   Jul 27, 2026 Vons                                        -268.50  Traditional Gold Card
+
+[145] Oct 3, 2026 | Nailtique Lakewood | -75.00
+  line 84    Oct 3, 2026  Nailtique Lakewood                           -75.00  Traditional Gold Card
+  line 92    Oct 3, 2026  Nailtique Lakewood                           -75.00  American Express® Traditional Gold
+
+[146] Apr 19, 2026 | Google | -1.99
+  line 1262  Apr 19, 2026 Google                                        -1.99  American Express® Traditional Gold
+  line 1263  Apr 19, 2026 Google                                        -1.99  Traditional Gold Card
+
+[147] Mar 18, 2025 | Google | -1.99
+  line 3018  Mar 18, 2025 Google                                        -1.99  American Express® Traditional Gold
+  line 3021  Mar 18, 2025 Google                                        -1.99  Traditional Gold Card
+
+[148] Oct 3, 2026 | Wal-mart | -98.91
+  line 82    Oct 3, 2026  Wal-mart                                     -98.91  Traditional Gold Card
+  line 90    Oct 3, 2026  Wal-mart                                     -98.91  American Express® Traditional Gold
+
+[149] Sep 7, 2026 | Google | -2.99
+  line 279   Sep 7, 2026  Google                                        -2.99  American Express® Traditional Gold
+  line 281   Sep 7, 2026  Google                                        -2.99  Traditional Gold Card
+
+[150] Aug 11, 2026 | Smart & Final | -52.08
+  line 476   Aug 11, 2026 Smart & Final                                -52.08  American Express® Traditional Gold
+  line 478   Aug 11, 2026 Smart & Final                                -52.08  Traditional Gold Card
+
+[151] Jul 31, 2026 | Mcdonald's | -15.33
+  line 580   Jul 31, 2026 Mcdonald's                                   -15.33  American Express® Traditional Gold
+  line 582   Jul 31, 2026 Mcdonald's                                   -15.33  Traditional Gold Card
+
+[152] Nov 17, 2025 | Lyft | -74.00
+  line 1933  Nov 17, 2025 Lyft                                         -74.00  American Express® Traditional Gold
+  line 1934  Nov 17, 2025 Lyft                                         -74.00  Traditional Gold Card
+
+[153] Aug 22, 2026 | Mcdonald's | -10.78
+  line 397   Aug 22, 2026 Mcdonald's                                   -10.78  American Express® Traditional Gold
+  line 400   Aug 22, 2026 Mcdonald's                                   -10.78  Traditional Gold Card
+
+[154] Aug 8, 2026 | Albertsons | -60.01
+  line 505   Aug 8, 2026  Albertsons                                   -60.01  American Express® Traditional Gold
+  line 509   Aug 8, 2026  Albertsons                                   -60.01  Traditional Gold Card
+
+[155] Jun 19, 2026 | Google | -1.99
+  line 887   Jun 19, 2026 Google                                        -1.99  American Express® Traditional Gold
+  line 888   Jun 19, 2026 Google                                        -1.99  Traditional Gold Card
+
+[156] Aug 10, 2025 | The Toll Roads | -8.00
+  line 2408  Aug 10, 2025 The Toll Roads                                -8.00  American Express® Traditional Gold
+  line 2409  Aug 10, 2025 The Toll Roads                                -8.00  Traditional Gold Card
+
+[157] Oct 3, 2026 | Popeye's | -7.76
+  line 85    Oct 3, 2026  Popeye's                                      -7.76  Traditional Gold Card
+  line 93    Oct 3, 2026  Popeye's                                      -7.76  American Express® Traditional Gold
+
+[158] Jul 18, 2026 | Michaels | -36.97
+  line 682   Jul 18, 2026 Michaels                                     -36.97  American Express® Traditional Gold
+  line 683   Jul 18, 2026 Michaels                                     -36.97  Traditional Gold Card
+
+[159] May 18, 2025 | Google | -1.99
+  line 2762  May 18, 2025 Google                                        -1.99  American Express® Traditional Gold
+  line 2763  May 18, 2025 Google                                        -1.99  Traditional Gold Card
+
+[160] Aug 9, 2026 | Wal-mart | -72.82
+  line 496   Aug 9, 2026  Wal-mart                                     -72.82  American Express® Traditional Gold
+  line 499   Aug 9, 2026  Wal-mart                                     -72.82  Traditional Gold Card
+
+[161] Sep 26, 2026 | Mcdonald's | -9.37
+  line 163   Sep 26, 2026 Mcdonald's                                    -9.37  American Express® Traditional Gold
+  line 169   Sep 26, 2026 Mcdonald's                                    -9.37  Traditional Gold Card
+
+[162] Aug 25, 2026 | West End Cafe | -10.00
+  line 372   Aug 25, 2026 West End Cafe                                -10.00  Traditional Gold Card
+  line 373   Aug 25, 2026 West End Cafe                                -10.00  American Express® Traditional Gold
+
+[163] Oct 9, 2026 | Wendy's | -14.42
+  line 25    Oct 9, 2026  Wendy's                                      -14.42  American Express® Traditional Gold
+  line 28    Oct 9, 2026  Wendy's                                      -14.42  Traditional Gold Card
+
+[164] Jul 20, 2025 | Amazon | -3.99
+  line 2495  Jul 20, 2025 Amazon                                        -3.99  American Express® Traditional Gold
+  line 2496  Jul 20, 2025 Amazon                                        -3.99  Traditional Gold Card
+
+[165] Apr 19, 2025 | Google | -1.99
+  line 2885  Apr 19, 2025 Google                                        -1.99  American Express® Traditional Gold
+  line 2886  Apr 19, 2025 Google                                        -1.99  Traditional Gold Card
+
+[166] Aug 2, 2026 | Mcdonald's | -2.09
+  line 573   Aug 2, 2026  Mcdonald's                                    -2.09  American Express® Traditional Gold
+  line 575   Aug 2, 2026  Mcdonald's                                    -2.09  Traditional Gold Card
+
+[167] Sep 7, 2025 | Google | -2.99
+  line 2278  Sep 7, 2025  Google                                        -2.99  American Express® Traditional Gold
+  line 2279  Sep 7, 2025  Google                                        -2.99  Traditional Gold Card
+
+[168] Aug 27, 2026 | Beach Pizza | -16.31
+  line 359   Aug 27, 2026 Beach Pizza                                  -16.31  Traditional Gold Card
+  line 360   Aug 27, 2026 Beach Pizza                                  -16.31  American Express® Traditional Gold
+
+[169] Jul 22, 2026 | Mcdonald's | -11.90
+  line 643   Jul 22, 2026 Mcdonald's                                   -11.90  American Express® Traditional Gold
+  line 644   Jul 22, 2026 Mcdonald's                                   -11.90  Traditional Gold Card
+
+[170] Nov 13, 2025 | Google | -3.99
+  line 1946  Nov 13, 2025 Google                                        -3.99  American Express® Traditional Gold
+  line 1948  Nov 13, 2025 Google                                        -3.99  Traditional Gold Card
+
+Total duplicate groups: 170
