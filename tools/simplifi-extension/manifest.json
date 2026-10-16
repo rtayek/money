@@ -1,18 +1,29 @@
 {
   "manifest_version": 3,
   "name": "Simplifi Transaction Probe",
-  "version": "0.7.4",
+  "version": "0.7.6",
   "description": "Locally matches Simplifi exports and prepares or saves one-line notes for confirmed exact matches.",
-  "permissions": ["activeTab"],
+  "permissions": [
+    "activeTab",
+    "storage"
+  ],
   "action": {
-    "default_title": "Simplifi Transaction Probe",
-    "default_popup": "popup.html"
+    "default_title": "Simplifi Transaction Probe"
   },
   "content_scripts": [
     {
-      "matches": ["https://simplifi.quicken.com/*"],
-      "js": ["probe-core.js", "matcher-core.js", "content.js"],
+      "matches": [
+        "https://simplifi.quicken.com/*"
+      ],
+      "js": [
+        "probe-core.js",
+        "matcher-core.js",
+        "content.js"
+      ],
       "run_at": "document_idle"
     }
-  ]
+  ],
+  "background": {
+    "service_worker": "background.js"
+  }
 }

@@ -61,6 +61,17 @@ Payee-cell opening (0.7.1), dialog-level Close lookup (0.7.2), and waits for
 dialog transitions (0.7.3). Actual Simplifi UI behavior still needs manual
 verification after updating.
 
+Version 0.7.6 opens the toolbar controls in a separate movable, resizable
+window. Move it beside Simplifi or onto another monitor. It stays open and
+retains the loaded CSV while you click transactions. Clicking the toolbar icon
+again from the same Simplifi tab focuses that window. Controls stay bound to
+the original Simplifi tab rather than whichever window currently has focus.
+Close the probe window to clear its in-memory CSV; reopening requires choosing
+the file again. Session storage contains only tab/window IDs, not CSV contents.
+
+The layout uses 15px text, smaller buttons and tighter spacing. Match and
+inspection details expand below the controls. High-contrast colors remain.
+
 ## Checks
 
 ```sh

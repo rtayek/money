@@ -2,6 +2,8 @@ let reportText = "";
 let csvRecords = [];
 
 async function activeTab() {
+  const sourceTab = new URLSearchParams(location.search).get("tabId");
+  if (sourceTab !== null) return chrome.tabs.get(Number(sourceTab));
   const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
   return tabs[0];
 }

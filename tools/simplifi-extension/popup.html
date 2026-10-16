@@ -8,17 +8,16 @@
 </head>
 <body>
   <h1>Simplifi probe</h1>
-  <p>Open Simplifi's Transactions page, then scan the visible page. Nothing is changed or transmitted.</p>
+  <p>Keep this window open while working in Simplifi. Only Apply saves notes.</p>
   <div class="actions">
     <button id="scan">Scan visible page</button>
     <button id="inspectEditor">Inspect open transaction</button>
     <button id="copy" disabled>Copy report</button>
   </div>
   <p id="status" role="status">Ready.</p>
-  <pre id="report" aria-label="Sanitized probe report"></pre>
   <hr>
   <h2>Match annotated CSV</h2>
-  <p>Filter Simplifi to the same payee first. Matching remains read-only.</p>
+  <p>Use the same payee filter here and in Simplifi, or leave both unfiltered.</p>
   <label for="csv">Annotated CSV</label>
   <input id="csv" type="file" accept=".csv,text/csv">
   <label for="payeeFilter">Payee contains</label>
@@ -31,7 +30,14 @@
     <button id="clear">Clear marks</button>
   </div>
   <p id="matchStatus" role="status">Choose all-annotated.csv.</p>
-  <pre id="matchReport" aria-label="CSV match report"></pre>
+  <details>
+    <summary>Match details</summary>
+    <pre id="matchReport" aria-label="CSV match report"></pre>
+  </details>
+  <details>
+    <summary>Inspection details</summary>
+    <pre id="report" aria-label="Sanitized probe report"></pre>
+  </details>
   <script src="matcher-core.js"></script>
   <script src="popup.js"></script>
 </body>

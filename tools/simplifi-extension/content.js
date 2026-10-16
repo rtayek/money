@@ -101,7 +101,7 @@
     const controls = Array.from(root.querySelectorAll("input, textarea, select, button"))
       .filter(isVisible);
     return {
-      probeVersion: "0.7.4",
+      probeVersion: "0.7.6",
       root: {
         tag: root.tagName.toLowerCase(),
         role: root.getAttribute("role") || "",
@@ -431,7 +431,7 @@
     const controls = uniqueVisible(controlSelector, 150);
     const headers = uniqueVisible("[role='columnheader']", 50);
     return {
-      probeVersion: "0.7.4",
+      probeVersion: "0.7.6",
       capturedAt: new Date().toISOString(),
       page: {
         origin: location.origin,
