@@ -78,7 +78,8 @@
   }
 
   function amountCents(value) {
-    const original = String(value || "").trim();
+    const original = String(value ?? "").trim().replace(/\u2212/g, "-");
+    if (!/^(?:[+-]?\s*\$?\s*\d[\d,]*(?:\.\d{1,2})?|\$\s*[+-]?\s*\d[\d,]*(?:\.\d{1,2})?|\(\s*\$?\s*\d[\d,]*(?:\.\d{1,2})?\s*\))$/.test(original)) return null;
     const negative = /^\(.*\)$/.test(original) || original.includes("-");
     const number = Number(original.replace(/[^0-9.]/g, ""));
     if (!Number.isFinite(number)) return null;
@@ -91,7 +92,8 @@
       dateKey: normalizeDate(transaction.date),
       accountKey: normalizeText(transaction.account),
       payeeKey: normalizeText(transaction.payee),
-      amountKey: amountCents(transaction.amount)
+      amountKey: amountCents(transaction.amount),
+      directionKnown: /[+\-\u2212]/.test(String(transaction.amount)) || /^\s*\(/.test(String(transaction.amount))
     };
   }
 
@@ -106,10 +108,13 @@
     const preparedRows = visibleRows.map(prepareTransaction);
     const results = targets.map(target => {
       const preparedTarget = prepareTransaction(target);
-      const core = preparedRows.filter(row => sameCore(preparedTarget, row));
+      const core = preparedRows.filter(row => sameCore(preparedTarget, row) &&
+        (!row.directionKnown || preparedTarget.amountKey === row.amountKey));
       const exactAccount = core.filter(row => preparedTarget.accountKey &&
         preparedTarget.accountKey === row.accountKey);
-      if (exactAccount.length === 1) return { status: "exact", target, rows: exactAccount };
+      if (exactAccount.length === 1) return {
+        status: exactAccount[0].directionKnown ? "exact" : "probable", target, rows: exactAccount
+      };
       if (exactAccount.length > 1) return { status: "ambiguous", target, rows: exactAccount };
       if (core.length === 1) return { status: "probable", target, rows: core };
       if (core.length > 1) return { status: "ambiguous", target, rows: core };
@@ -146,20 +151,23 @@
       ...response.counts,
       missingCsvTargets: response.missingTargets,
       unmatchedSimplifiRows: response.unmatchedRows,
-      legend: "green=exact, yellow=probable account mismatch, red=ambiguous"
+      legend: "green=exact signed match, yellow=probable account mismatch or unknown direction, red=ambiguous"
     };
   }
 
   function mergeNote(existing, annotated) {
     const current = String(existing || "");
-    const desired = String(annotated || "").trim();
-    if (!desired || current.includes(desired)) return { value: current, changed: false };
-    const trimmedCurrent = current.trimEnd();
+    const singleLine = value => String(value || "").replace(/\s*[\r\n\u2028\u2029]+\s*/g, " | ").trim();
+    const desired = singleLine(annotated);
+    const trimmedCurrent = singleLine(current);
+    if (!desired || trimmedCurrent.includes(desired)) {
+      return { value: trimmedCurrent, changed: trimmedCurrent !== current };
+    }
     if (trimmedCurrent && desired.startsWith(trimmedCurrent)) {
       return { value: desired, changed: desired !== current };
     }
     return {
-      value: trimmedCurrent ? `${trimmedCurrent}\n${desired}` : desired,
+      value: trimmedCurrent ? `${trimmedCurrent} | ${desired}` : desired,
       changed: true
     };
   }

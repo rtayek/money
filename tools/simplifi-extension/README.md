@@ -1,81 +1,72 @@
 # Simplifi Transaction Probe
 
-This unpacked Chrome extension inspects the visible Quicken Simplifi page. It
-does not edit transactions, store data, or make network requests.
-Its diagnostic report masks free-form text, dates, amounts, email addresses,
-and long numbers while retaining DOM structure, grid column names, and common
-transaction labels.
+This unpacked Chrome extension inspects and matches Quicken Simplifi transactions
+against an annotated CSV. It can prepare a note for review, or save notes in an
+explicitly confirmed batch of up to five visible exact matches. It does not
+change categories, store the CSV, or make network requests.
 
 ## Install
 
 1. Open `chrome://extensions` in Chrome.
 2. Turn on **Developer mode**.
-3. Choose **Load unpacked**.
-4. Select this `tools/simplifi-extension` directory.
-5. Reload the open Simplifi tab.
+3. Choose **Load unpacked** and select this `tools/simplifi-extension` directory.
+4. Reload the open Simplifi tab. After updating the extension, reload it on the
+   extensions page and reload Simplifi too.
 
-## Probe the transaction page
+## Inspect and match
 
 1. Sign in to Simplifi normally and open **Transactions**.
-2. Click the extension icon and choose **Scan visible page**.
-3. Confirm that it found row candidates and controls.
-4. Use **Copy report** when the adapter needs diagnosis.
+2. Filter Transactions to one payee such as **Google**.
+3. Open the extension and choose `all-annotated.csv`.
+4. Enter the same payee filter and choose **Match visible rows**.
+5. Review the totals and row outlines: green is exact, yellow is probable
+   (account mismatch or unknown transaction direction), and red is ambiguous.
 
-With a transaction details panel open, **Inspect open transaction** produces a
-small read-only report of that editor's labels and controls. It never includes
-field values and does not click, type, or submit anything.
+Matching requires date, payee, amount, and account. Simplifi CSV amounts use
+negative values for charges and positive values for credits. An exact match
+requires the page amount to explicitly show its sign (`-`, `+`, or negative
+parentheses). An unsigned page amount is only probable; it cannot authorize
+note preparation or a batch save. Opposite signed amounts never match. Missing
+or invalid amounts never match. Duplicate claims are ambiguous.
 
-Version 0.6 adds a controlled **Prepare open note (not saved)** pilot. After an
-annotated CSV is loaded and one transaction editor is open, it requires exactly
-one date/account/payee/amount match, preserves or appends to an existing Note,
-and fills the Note field. It never clicks **Update**; the human must inspect the
-field and decide whether to save or close the editor.
-
-Version 0.7 adds an explicitly confirmed batch limited to five visible exact
-matches. It preserves existing Notes, skips annotations already present, saves
-one transaction at a time, reopens each saved transaction to verify the full
-annotation, and stops on the first unexpected UI or matching condition. It
-does not change categories or process probable, ambiguous, or missing matches.
-Version 0.7.1 opens a selected transaction through its Payee cell, matching the
-manual interaction required by Simplifi's data grid.
-
-The basic scan only reads the visible DOM. Version 0.4 can also sweep through a
-filtered, virtualized transaction grid to compare an annotated export with all
-of the rows in that filtered view. Editing stays disabled until read-only
-matching has been tested against real Simplifi pages.
-
-## Match an annotated export
-
-1. In Simplifi, filter Transactions to one payee such as **Google**.
-2. Open the extension and choose `all-annotated.csv`.
-3. Enter the same payee filter and choose **Match visible rows**.
-4. Review the totals and row outlines: green is exact, yellow is a
-   unique date/payee/amount match with an account-name mismatch, and red is
-   ambiguous.
-
-Choose **Sweep filtered rows** to read the entire filtered transaction grid.
+Choose **Sweep filtered rows** to read the entire filtered, virtualized grid.
 Simplifi scrolls temporarily while the extension collects transaction IDs and
 named cells, then returns to the original scroll position. Do not interact with
-the transaction grid during the sweep. The sweep stops after 30 seconds rather
-than continuing indefinitely and reports whether it completed. Version 0.4.2
-also lists identifying fields for missing CSV targets and unmatched Simplifi
-rows so they can be reviewed without hunting through the grid.
+the grid during the sweep. The sweep stops after 30 seconds and reports whether
+it completed, including missing CSV targets and unmatched Simplifi rows.
+Outlines follow transaction IDs as rows are virtualized.
 
-The CSV is parsed in memory inside the extension and is never uploaded or
-stored. Matching uses date, account, payee, and absolute amount. The extension
-does not write notes or click Simplifi controls in version 0.4.
-Outlines are tied to transaction IDs, so scrolling cannot transfer a mark to a
-different virtualized row.
+**Scan visible page** produces a diagnostic report masking free-form text,
+dates, amounts, email addresses, and long numbers while retaining DOM structure,
+grid column names, and common transaction labels. **Inspect open transaction**
+reports editor labels and controls without field values or changes.
 
-Version 0.7.2 locates Close in the surrounding transaction dialog when
-Simplifi renders it outside the editor's inner form.
+## Prepare or save notes
 
-Version 0.7.3 waits for the whole transaction dialog to finish closing before
-opening or verifying the next transaction in a batch.
+**Prepare open note (not saved)** requires one exact CSV match for the open
+editor. It fills the Note field; inspect the result and click Update yourself.
 
-Run the deterministic sanitizer checks with:
+The confirmed batch handles at most five visible exact matches, saves one at a
+time, waits for the dialog to close, reopens each transaction to verify its
+saved note, and stops on the first unexpected condition. Probable, ambiguous,
+and missing matches are skipped.
+
+Notes are one line, as required by Simplifi. Existing text and annotations are
+joined with ` | `; imported line breaks are converted to the same separator.
+An annotation already present is skipped, including after newline conversion.
+The CSV is parsed only in extension memory and is never uploaded or stored.
+
+Version 0.7.4 adds signed matching and one-line notes. Previous 0.7 fixes added
+Payee-cell opening (0.7.1), dialog-level Close lookup (0.7.2), and waits for
+dialog transitions (0.7.3). Actual Simplifi UI behavior still needs manual
+verification after updating.
+
+## Checks
 
 ```sh
 node tools/simplifi-extension/probe-core.test.js
 node tools/simplifi-extension/matcher-core.test.js
 ```
+
+These deterministic checks cover matching, note merging, and diagnostic masking;
+they do not exercise a live browser's open/save/close sequence.

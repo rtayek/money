@@ -13,8 +13,9 @@ live in `doc/patterns.md` -- read it for any task touching `SpendingPlot`,
 - `SpendingPlot` -- the main charting tool. Auto-detects and drops
   cross-account mirror duplicates (130 duplicate rows from the double-linked
   Amex account pair on real data). Also handles charge/reversal pairs
-  (matched by account, opposite amount, 3-day window, and wording like
-  "adjustment"/"refund"/"reversed") and merchant refunds (Amazon, Temu,
+  (matched by nonempty account, opposite amount, 3-day window, matching
+  merchant after removing reversal wording, and wording like
+  "adjustment"/"refund"/"reversed"; ambiguous pairs are retained) and merchant refunds (Amazon, Temu,
   Walmart credits count as negative Shopping spending, not income, so a
   refund offsets the original purchase instead of inflating income).
   Writes `reports/uncategorized-checks.csv`, `reports/recurring-
@@ -45,7 +46,8 @@ live in `doc/patterns.md` -- read it for any task touching `SpendingPlot`,
   inside it) by amount and date proximity (within 7 days), and recommends
   a specific category per charge (known subscriptions like Kindle
   Unlimited/Audible by name; otherwise by Amazon's own department
-  taxonomy). Reuses the same mirror-dedup as SpendingPlot. Writes
+  taxonomy). Uses its own hard-coded mirror-dedup, rather than the shared
+  `MirrorDuplicates` implementation. Writes
   `reports/amazon-transaction-review.csv` (everything) and `reports/
   amazon-action-items.csv` (just the ones whose current category doesn't
   match the recommendation). Verified end-to-end by Claude against a
@@ -70,6 +72,15 @@ live in `doc/patterns.md` -- read it for any task touching `SpendingPlot`,
 - `.llm/human.md` and `.llm/persona.md` were fully retired (deleted) from
   this repo 2026-09-28 -- they no longer exist here at all. Superseded the
   earlier "materialized from symlinks" state.
+
+- `tools/simplifi-extension` -- version 0.7.4 matches annotated CSVs to
+  Simplifi and can prepare or explicitly batch-save notes (up to five visible
+  exact matches), reopening each save for verification. Notes use one line
+  with ` | ` separators; imported line breaks are flattened. Exact matches
+  require explicit page amount direction. Unsigned page amounts are probable
+  and cannot authorize writes; opposite signed amounts do not match.
+  JavaScript regression checks and Java 25 compilation/reversal regression
+  checks pass; live-browser behavior needs UAT.
 
 ## Next
 

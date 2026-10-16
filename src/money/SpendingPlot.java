@@ -145,30 +145,33 @@ public final class SpendingPlot {
 			String key=row.account().strip().toLowerCase(Locale.ROOT)+"|"+cents;
 			byAccountAndAmount.computeIfAbsent(key,_->new ArrayList<>()).add(i);
 		}
-		boolean[] removed=new boolean[rows.size()];
-		int pairs=0;
+		Map<Integer,List<Integer>> partners=new LinkedHashMap<>();
 		for(List<Integer> candidates:byAccountAndAmount.values()) {
 			for(int i:candidates) {
 				Transaction charge=rows.get(i).txn();
-				if(removed[i]||charge.amount()>=0||charge.date()==null) continue;
-				int best=-1;
-				long bestDays=Long.MAX_VALUE;
+				if(charge.amount()>=0||charge.date()==null||rows.get(i).account().isBlank()) continue;
 				for(int j:candidates) {
 					Transaction credit=rows.get(j).txn();
-					if(removed[j]||credit.amount()<=0||credit.date()==null) continue;
+					if(credit.amount()<=0||credit.date()==null) continue;
 					long days=Math.abs(ChronoUnit.DAYS.between(charge.date(),credit.date()));
 					if(days>reversalMaxDays||(!looksLikeReversal(charge.payee())&&!looksLikeReversal(credit.payee()))) continue;
-					if(days<bestDays) {
-						best=j;
-						bestDays=days;
-					}
-				}
-				if(best>=0) {
-					removed[i]=true;
-					removed[best]=true;
-					pairs++;
+					String merchant=reversalMerchant(charge.payee());
+					if(merchant.isEmpty()||!merchant.equals(reversalMerchant(credit.payee()))) continue;
+					partners.computeIfAbsent(i,key->new ArrayList<>()).add(j);
+					partners.computeIfAbsent(j,key->new ArrayList<>()).add(i);
 				}
 			}
+		}
+		boolean[] removed=new boolean[rows.size()];
+		int pairs=0;
+		for(var entry:partners.entrySet()) {
+			int index=entry.getKey();
+			if(removed[index]||entry.getValue().size()!=1) continue;
+			int partner=entry.getValue().get(0);
+			if(partners.get(partner).size()!=1) continue;
+			removed[index]=true;
+			removed[partner]=true;
+			pairs++;
 		}
 		if(pairs>0) System.out.printf("Ignored %d charge/reversal pair(s).%n",pairs);
 		List<Row> out=new ArrayList<>(rows.size()-pairs*2);
@@ -178,6 +181,11 @@ public final class SpendingPlot {
 	}
 	private static boolean looksLikeReversal(String payee) {
 		return payee!=null&&reversalPayee.matcher(payee).find();
+	}
+	private static String reversalMerchant(String payee) {
+		if(payee==null) return "";
+		return reversalPayee.matcher(payee.toLowerCase(Locale.ROOT)).replaceAll(" ")
+				.replaceAll("[^\\p{L}\\p{N}]+"," ").strip().replaceAll("\\s+"," ");
 	}
 	static List<Transaction> withoutMirroredDuplicates(List<Row> rows) {
 		List<Transaction> out=new ArrayList<>(rows.size());

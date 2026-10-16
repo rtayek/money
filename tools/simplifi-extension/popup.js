@@ -115,7 +115,7 @@ async function matchVisibleRows() {
       csvTargets: targets.length,
       visibleTransactionRows: response.visibleRows,
       ...response.counts,
-      legend: "green=exact, yellow=probable account mismatch, red=ambiguous"
+      legend: "green=exact signed match, yellow=probable account mismatch or unknown direction, red=ambiguous"
     };
     output.textContent = JSON.stringify(report, null, 2);
     status.textContent = `${response.counts.exact} exact matches; no Simplifi data changed.`;

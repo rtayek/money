@@ -62,3 +62,29 @@ When two candidate rows are equally good (same date-distance, same
 merchant-relatedness), don't pick the first one arbitrarily -- mark the
 match "ambiguous" in the output and count it separately from clean matches.
 Both `AmexMatchReport` and `CategorizationAudit` do this now.
+
+## Charge/reversal cancellation within Simplifi
+
+`SpendingPlot.withoutReversalPairs` requires a nonempty matching account,
+opposite amounts (in cents), dates within three days, and reversal wording in
+at least one payee. Both payees must reduce to the same nonempty merchant after
+removing reversal words, normalizing case, punctuation, and whitespace. A
+bare "Refund" or an unrelated merchant credit cannot cancel a charge. A pair is
+removed only if each row has exactly one eligible partner; competing candidates
+are retained rather than resolved by row order or nearest date.
+
+## Extension matching and notes
+
+The extension compares two Simplifi representations using the same amount sign
+convention, unlike Simplifi/Plaid reconciliation. Only explicit signed page
+amounts can establish an exact match. Unsigned page amounts remain probable and
+cannot authorize writes. Existing notes and imported annotations are flattened
+to one line with ` | ` separators before merging and checking for duplicates.
+
+Run reversal regression checks with JDK 25 from the repository root:
+
+```sh
+mkdir -p build/reversal-tests
+javac -d build/reversal-tests src/money/*.java tst/money/ReversalPairsTest.java
+java -Djava.awt.headless=true -cp build/reversal-tests money.ReversalPairsTest
+```
