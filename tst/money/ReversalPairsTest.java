@@ -23,7 +23,7 @@ public final class ReversalPairsTest {
 
     private static SpendingPlot.Row row(String account, String payee, double amount, int day) {
         return new SpendingPlot.Row(account, new SpendingPlot.Transaction(
-                LocalDate.of(2026, 10, day), "Shopping", payee, "", amount), false);
+                LocalDate.of(2026, 10, day), "Shopping", payee, "", amount), "");
     }
 
     private static void check(int remaining, SpendingPlot.Row... rows) {

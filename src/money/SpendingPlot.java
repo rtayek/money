@@ -94,18 +94,24 @@ public final class SpendingPlot {
 		return Files.exists(defaultCsv)?defaultCsv:chooseFile();
 	}
 	// ---- CSV loading ------------------------------------------------------
-	/** Parses every row of the CSV, removes charge/reversal pairs and mirrored
-	 * account duplicates, then drops what Simplifi flagged as excluded. Every
-	 * month and category is kept, and the amount keeps its original CSV sign
-	 * (negative = money out). */
+	/** Parses every row of the CSV, reports duplicate pairs before filtering,
+	 * removes charge/reversal pairs, drops excluded rows, and removes mirrored
+	 * account duplicates. Every month and category is kept, and the amount
+	 * keeps its original CSV sign (negative = money out). */
 	static List<Transaction> loadAllTransactions(Path csv) {
+		return loadAllTransactions(csv,duplicatePairsOutput);
+	}
+	static List<Transaction> loadAllTransactions(Path csv,Path duplicateReport) {
 		List<String> lines;
 		try {
 			lines=Files.readAllLines(csv,StandardCharsets.UTF_8);
 		} catch(IOException e) {
 			throw new UncheckedIOException("Could not read "+csv,e);
 		}
-		if(lines.isEmpty()) return List.of();
+		if(lines.isEmpty()) {
+			writeDuplicatePairs(List.of(),duplicateReport);
+			return List.of();
+		}
 		List<String> header=parseCsvLine(lines.get(0));
 		int dateCol=indexOfHeader(header,"Date");
 		int catCol=indexOfHeader(header,"Category");
@@ -121,7 +127,7 @@ public final class SpendingPlot {
 			if(raw.isBlank()) continue;
 			List<String> fields=parseCsvLine(raw);
 			if(amtCol>=fields.size()||catCol>=fields.size()) continue;
-			boolean excluded=exclCol>=0&&exclCol<fields.size()&&fields.get(exclCol).strip().equalsIgnoreCase("yes");
+			String exclusion=exclCol>=0&&exclCol<fields.size()?fields.get(exclCol).strip():"";
 			double amount=parseAmount(fields.get(amtCol));
 			String category=fields.get(catCol).strip();
 			if(category.isEmpty()) category="(Uncategorized)";
@@ -129,8 +135,9 @@ public final class SpendingPlot {
 			String payee=(payeeCol>=0&&payeeCol<fields.size())?fields.get(payeeCol).strip():"";
 			String note=(noteCol>=0&&noteCol<fields.size())?fields.get(noteCol).strip():"";
 			String account=(acctCol>=0&&acctCol<fields.size())?fields.get(acctCol).strip():"";
-			rows.add(new Row(account,new Transaction(date,category,payee,note,amount),excluded));
+			rows.add(new Row(account,new Transaction(date,category,payee,note,amount),exclusion));
 		}
+		writeDuplicatePairs(rows,duplicateReport);
 		List<Row> withoutReversals=withoutReversalPairs(rows);
 		List<Row> included=new ArrayList<>();
 		for(Row row:withoutReversals)
@@ -193,9 +200,32 @@ public final class SpendingPlot {
 			out.add(r.txn());
 		return out;
 	}
+	static int writeDuplicatePairs(List<Row> rows,Path output) {
+		List<MirrorDuplicates.Pair<Row>> pairs=MirrorDuplicates.pairs(rows);
+		List<String> lines=new ArrayList<>();
+		lines.add("Date,Payee,Amount,Account 1,Account 1 Exclusion,Account 2,Account 2 Exclusion");
+		for(MirrorDuplicates.Pair<Row> pair:pairs) {
+			Row first=pair.first();
+			Row second=pair.second();
+			lines.add(String.join(",",first.date()==null?"":first.date().toString(),csvCell(first.payee()),
+					String.format(Locale.US,"%.2f",first.amount()),csvCell(first.account()),csvCell(first.exclusion()),
+					csvCell(second.account()),csvCell(second.exclusion())));
+		}
+		try {
+			Path parent=output.toAbsolutePath().getParent();
+			if(parent!=null) Files.createDirectories(parent);
+			Files.writeString(output,String.join("\n",lines)+"\n",StandardCharsets.UTF_8);
+		} catch(IOException e) {
+			throw new UncheckedIOException("Could not write "+output,e);
+		}
+		System.out.printf(Locale.US,"Duplicate pairs: %d%n",pairs.size());
+		System.out.println("Duplicate-pair report: "+output.toAbsolutePath());
+		return pairs.size();
+	}
 	/** A parsed row plus its source account, used only for duplicate
 	 * detection. */
-	record Row(String account,Transaction txn,boolean excluded) implements MirrorDuplicates.Candidate {
+	record Row(String account,Transaction txn,String exclusion) implements MirrorDuplicates.Candidate {
+		boolean excluded() { return exclusion.equalsIgnoreCase("yes"); }
 		@Override public LocalDate date() { return txn.date(); }
 		@Override public String payee() { return txn.payee(); }
 		@Override public String category() { return txn.category(); }
@@ -1531,6 +1561,8 @@ public final class SpendingPlot {
 	private static final Path recurringCandidatesOutput=Path.of("reports","recurring-candidates.csv");
 	/** Where the standard-deviation report is written. */
 	private static final Path standardDeviationsOutput=Path.of("reports","standard-deviations.csv");
+	/** Where exact cross-account duplicate pairs are written before filtering. */
+	private static final Path duplicatePairsOutput=Path.of("reports","duplicate-pairs.csv");
 	/** Payee pattern for a paper check, e.g. "Check 1234". */
 	private static final Pattern checkPayee=Pattern.compile("(?i)^check\\s+(\\d+)\\s*$");
 	private static final String[] datePatterns= {"MMM d, yyyy","MMMM d, yyyy", // Simplifi:
@@ -1539,4 +1571,3 @@ public final class SpendingPlot {
 																				// 2026"
 			"M/d/yyyy","MM/dd/yyyy","M/d/yy","MM/dd/yy","yyyy/M/d","M-d-yyyy","MM-dd-yyyy","d-MMM-yyyy","d MMM yyyy"};
 }
-

@@ -3,6 +3,7 @@ package money;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -19,6 +20,10 @@ import java.util.Map;
  * alone. */
 final class MirrorDuplicates {
 
+    record Pair<T extends Candidate>(T first, T second) {}
+
+    private record Analysis<T extends Candidate>(Map<String, String> mirrorOf, List<Pair<T>> pairs) {}
+
     interface Candidate {
         String account();
         LocalDate date();
@@ -32,6 +37,42 @@ final class MirrorDuplicates {
     }
 
     static <T extends Candidate> List<T> remove(List<T> rows) {
+        Analysis<T> analysis = analyze(rows);
+        Map<T, T> twinsByRemovedRow = new IdentityHashMap<>();
+        for (Pair<T> pair : analysis.pairs())
+            twinsByRemovedRow.put(pair.first(), pair.second());
+        Map<String, String> mirrorOf = analysis.mirrorOf();
+        List<T> out = new ArrayList<>(rows.size());
+        int categoryConflicts = 0;
+        for (T r : rows) {
+            T kept = twinsByRemovedRow.get(r);
+            if (kept != null) {
+                if (!r.category().equalsIgnoreCase(kept.category())) {
+                    categoryConflicts++;
+                    System.out.printf(Locale.US,
+                            "Warning: mirrored copies have different categories: "
+                                    + "%s | %s | %,.2f | dropping %s [%s], keeping %s [%s]%n",
+                            r.date(), r.payee(), r.amount(), r.account(), r.category(),
+                            kept.account(), kept.category());
+                }
+                continue;
+            }
+            out.add(r);
+        }
+        int dropped = analysis.pairs().size();
+        if (dropped > 0)
+            System.out.printf(Locale.US, "Ignored %d duplicate rows from mirrored account(s): %s%n", dropped, mirrorOf);
+        if (categoryConflicts > 0)
+            System.out.printf(Locale.US, "Found %d mirrored category conflict(s); review the warnings above.%n",
+                    categoryConflicts);
+        return out;
+    }
+
+    static <T extends Candidate> List<Pair<T>> pairs(List<T> rows) {
+        return analyze(rows).pairs();
+    }
+
+    private static <T extends Candidate> Analysis<T> analyze(List<T> rows) {
         Map<String, List<T>> byAccount = new LinkedHashMap<>();
         for (T r : rows)
             byAccount.computeIfAbsent(r.account(), k -> new ArrayList<>()).add(r);
@@ -39,35 +80,19 @@ final class MirrorDuplicates {
         Map<String, Map<String, List<T>>> available = new LinkedHashMap<>();
         for (String partner : new HashSet<>(mirrorOf.values()))
             available.put(partner, rowsByKey(byAccount.get(partner)));
-        List<T> out = new ArrayList<>(rows.size());
-        int dropped = 0;
-        int categoryConflicts = 0;
+        List<Pair<T>> pairs = new ArrayList<>();
         for (T r : rows) {
             String partner = mirrorOf.get(r.account());
             if (partner != null) {
                 List<T> twins = available.get(partner).get(r.mirrorKey());
                 if (twins != null && !twins.isEmpty()) {
                     T kept = twins.remove(twins.size() - 1);
-                    if (!r.category().equalsIgnoreCase(kept.category())) {
-                        categoryConflicts++;
-                        System.out.printf(Locale.US,
-                                "Warning: mirrored copies have different categories: "
-                                        + "%s | %s | %,.2f | dropping %s [%s], keeping %s [%s]%n",
-                                r.date(), r.payee(), r.amount(), r.account(), r.category(),
-                                kept.account(), kept.category());
-                    }
-                    dropped++;
+                    pairs.add(new Pair<>(r, kept));
                     continue;
                 }
             }
-            out.add(r);
         }
-        if (dropped > 0)
-            System.out.printf(Locale.US, "Ignored %d duplicate rows from mirrored account(s): %s%n", dropped, mirrorOf);
-        if (categoryConflicts > 0)
-            System.out.printf(Locale.US, "Found %d mirrored category conflict(s); review the warnings above.%n",
-                    categoryConflicts);
-        return out;
+        return new Analysis<>(mirrorOf, pairs);
     }
 
     /** Maps each mirror account to the account whose copy is kept. */
