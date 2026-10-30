@@ -82,14 +82,8 @@ testfile.txt
 ###############################################################################
 /private/
 /reports/
-/all.csv
-/all-annotated.csv
-/income.csv
-/uncategorized-checks.csv
-/recurring-charges-review.csv
+/*.csv
 /recurring-charges-summary.md
-/amazon-order-history.csv
-/plaid-transactions.csv
 /amazon-recurring-charges.md
 /payee-match-misses.md
 /card-registry.md
